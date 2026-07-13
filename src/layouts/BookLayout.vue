@@ -4,9 +4,8 @@
 </script>
 
 <template>
-	<div class="flex min-h-[calc(100vh-3.5rem)]">
+	<div class="flex min-h-[calc(100vh-4rem)]">
 		<aside class="w-56 shrink-0 border-r border-line bg-surface p-4">
-			<RouterLink to="/" class="mb-6 inline-block text-sm text-muted transition hover:text-ink">← Books</RouterLink>
 			<nav class="flex flex-col gap-1">
 				<RouterLink
 					:to="`/book/${route.params.id}/editor`"

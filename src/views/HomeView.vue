@@ -1,21 +1,11 @@
 <script lang="ts" setup>
-	import { ref } from "vue";
+	import { storeToRefs } from "pinia";
 	import { Upload, FolderPlus, ArrowDownUp, Plus } from "lucide-vue-next";
+	import { useBooksStore } from "../stores/books";
 
-	const books = ref([
-		{ id: 1, title: "The Silver Thread", author: "Myst Sol", wordCount: 12400 },
-		{ id: 2, title: "Northwind", author: "Myst Sol", wordCount: 3000 },
-		{ id: 3, title: "Untitled Draft", author: "Myst Sol", wordCount: 0 },
-	]);
-
-	function addBook() {
-		books.value.push({
-			id: Date.now(),
-			title: "Untitled Draft",
-			author: "",
-			wordCount: 0,
-		});
-	}
+	const booksStore = useBooksStore();
+	const { books } = storeToRefs(booksStore);
+	const { addBook } = booksStore;
 </script>
 
 <template>
