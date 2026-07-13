@@ -1,2 +1,23 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+    --color-canvas: #F4F5F7;
+    --color-surface: #FCFCFD;
+    --color-line: #E4E6EA;
+    --color-ink: #1A1D23;
+    --color-muted: #667085;
+    --color-forest: #15803D;
+    --color-violet: #6D28D9;
+}
+
+.dark {
+    --color-canvas: #0E1013;
+    --color-surface: #16191F;
+    --color-line: #262B33;
+    --color-ink: #E7E9EC;
+    --color-muted: #8B929E;
+    --color-forest: #34C77B;
+    --color-violet: #8B5CF6;
+}
