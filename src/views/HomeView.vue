@@ -1,14 +1,22 @@
 <script lang="ts" setup>
-	import { onMounted } from "vue";
+	import { ref, onMounted } from "vue";
 	import { storeToRefs } from "pinia";
 	import { Upload, FolderPlus, ArrowDownUp, Plus } from "lucide-vue-next";
 	import { useBooksStore } from "../stores/books";
+	import NewBookModal from "../components/NewBookModal.vue";
 
 	const booksStore = useBooksStore();
 	const { books } = storeToRefs(booksStore);
 	const { addBook, fetchBooks } = booksStore;
 
+	const showModal = ref(false);
+
 	onMounted(fetchBooks);
+
+	async function handleCreate(payload: { title: string; author: string }) {
+		await addBook(payload);
+		showModal.value = false;
+	}
 </script>
 
 <template>
@@ -43,11 +51,13 @@
 			</RouterLink>
 
 			<button
-				@click="addBook"
+				@click="showModal = true"
 				class="group/add flex aspect-2/3 w-36 cursor-pointer flex-col items-center justify-center gap-2 self-start rounded-md border-2 border-dashed border-line text-muted transition hover:border-violet hover:text-ink">
 				<Plus class="h-8 w-8 transition group-hover/add:scale-110" />
 				<span class="text-xs">New book</span>
 			</button>
 		</div>
+
+		<NewBookModal v-if="showModal" @close="showModal = false" @create="handleCreate" />
 	</div>
 </template>

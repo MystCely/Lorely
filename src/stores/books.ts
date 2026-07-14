@@ -21,8 +21,12 @@ export const useBooksStore = defineStore("books", () => {
 		books.value = data ?? [];
 	}
 
-	async function addBook() {
-		const { data, error } = await supabase.from("books").insert({ title: "Untitled Draft" }).select().single();
+	async function addBook(payload: { title: string; author: string }) {
+		const { data, error } = await supabase
+			.from("books")
+			.insert({ title: payload.title, author: payload.author || null })
+			.select()
+			.single();
 		if (error) throw error;
 		books.value.unshift(data);
 	}
