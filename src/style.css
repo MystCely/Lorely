@@ -10,6 +10,10 @@
 	--color-muted: #667085;
 	--color-forest: #15803d;
 	--color-violet: #6d28d9;
+
+	--font-sans: "Poppins", ui-sans-serif, system-ui, sans-serif;
+
+	--default-transition-duration: 250ms;
 }
 
 .dark {

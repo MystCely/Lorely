@@ -1,20 +1,32 @@
 <script lang="ts" setup>
-	import { ref } from "vue";
+	import { ref, onMounted } from "vue";
 	import { X, ImagePlus } from "lucide-vue-next";
 
 	const emit = defineEmits<{
 		close: [];
-		create: [payload: { title: string; author: string }];
+		create: [payload: { title: string; author: string; coverFile: File | null }];
 	}>();
 
 	const title = ref("");
 	const author = ref("");
+	const coverFile = ref<File | null>(null);
+	const coverPreview = ref("");
+	const titleInput = ref<HTMLInputElement | null>(null);
+
+	onMounted(() => titleInput.value?.focus());
+
+	function onCoverChange(e: Event) {
+		const file = (e.target as HTMLInputElement).files?.[0] ?? null;
+		coverFile.value = file;
+		coverPreview.value = file ? URL.createObjectURL(file) : "";
+	}
 
 	function submit() {
 		if (!title.value.trim()) return;
 		emit("create", {
 			title: title.value.trim(),
 			author: author.value.trim(),
+			coverFile: coverFile.value,
 		});
 	}
 </script>
@@ -33,12 +45,23 @@
 			</div>
 
 			<div class="flex gap-5">
-				<div
-					class="flex aspect-2/3 w-40 shrink-0 flex-col items-center justify-center gap-2 rounded-md bg-linear-to-br from-violet to-forest text-white/90">
-					<ImagePlus class="h-6 w-6" />
-					<span class="text-xs font-medium">Add cover</span>
-					<span class="text-[10px] text-white/70">coming soon</span>
-				</div>
+				<label
+					class="group relative flex aspect-2/3 w-40 shrink-0 cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-md bg-linear-to-br from-violet to-forest text-white/90">
+					<img v-if="coverPreview" :src="coverPreview" alt="" class="absolute inset-0 h-full w-full object-cover" />
+					<template v-else>
+						<ImagePlus class="h-6 w-6" />
+						<span class="text-sm font-medium">Add Cover</span>
+					</template>
+
+					<div
+						v-if="coverPreview"
+						class="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/40 text-white opacity-0 backdrop-blur-sm transition duration-300 group-hover:opacity-100">
+						<ImagePlus class="h-6 w-6" />
+						<span class="text-xs font-medium">Change cover</span>
+					</div>
+
+					<input type="file" accept="image/png, image/jpeg, image/webp" class="hidden" @change="onCoverChange" />
+				</label>
 
 				<form class="flex flex-1 flex-col gap-4" @submit.prevent="submit">
 					<div class="flex flex-col gap-1">

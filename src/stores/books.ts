@@ -7,7 +7,7 @@ export interface Book {
 	title: string;
 	author: string | null;
 	project_id: string | null;
-	cover_img: string | null;
+	cover_image: string | null;
 	default_color: string | null;
 	created_at: string;
 }
@@ -21,10 +21,27 @@ export const useBooksStore = defineStore("books", () => {
 		books.value = data ?? [];
 	}
 
-	async function addBook(payload: { title: string; author: string }) {
+	async function addBook(payload: { title: string; author: string; coverFile: File | null }) {
+		let coverUrl: string | null = null;
+
+		if (payload.coverFile) {
+			const { data: userData } = await supabase.auth.getUser();
+			const userId = userData.user?.id;
+			if (!userId) throw new Error("Not signed in");
+
+			const ext = payload.coverFile.name.split(".").pop();
+			const path = `${userId}/${crypto.randomUUID()}.${ext}`;
+
+			const { error: uploadError } = await supabase.storage.from("covers").upload(path, payload.coverFile);
+			if (uploadError) throw uploadError;
+
+			const { data: urlData } = supabase.storage.from("covers").getPublicUrl(path);
+			coverUrl = urlData.publicUrl;
+		}
+
 		const { data, error } = await supabase
 			.from("books")
-			.insert({ title: payload.title, author: payload.author || null })
+			.insert({ title: payload.title, author: payload.author || null, cover_image: coverUrl })
 			.select()
 			.single();
 		if (error) throw error;

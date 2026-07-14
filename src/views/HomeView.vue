@@ -13,7 +13,7 @@
 
 	onMounted(fetchBooks);
 
-	async function handleCreate(payload: { title: string; author: string }) {
+	async function handleCreate(payload: { title: string; author: string; coverFile: File | null }) {
 		await addBook(payload);
 		showModal.value = false;
 	}
@@ -44,10 +44,15 @@
 		<div class="flex flex-wrap gap-6">
 			<RouterLink v-for="book in books" :key="book.id" :to="`/book/${book.id}/editor`" class="group w-36">
 				<div
-					class="flex aspect-2/3 items-end rounded-md bg-linear-to-br from-violet to-forest p-3 shadow-md transition group-hover:-translate-y-1 group-hover:shadow-xl">
-					<h3 class="text-sm font-semibold leading-tight text-white drop-shadow">{{ book.title }}</h3>
+					class="relative flex aspect-2/3 overflow-hidden rounded-md bg-linear-to-br from-violet to-forest shadow-md transition group-hover:-translate-y-1 group-hover:shadow-xl">
+					<img
+						v-if="book.cover_image"
+						:src="book.cover_image"
+						alt=""
+						class="absolute inset-0 h-full w-full object-cover" />
 				</div>
-				<p class="mt-2 text-xs text-muted">{{ book.author || "No author yet" }}</p>
+				<h3 class="mt-3 text-sm font-medium leading-tight text-ink">{{ book.title }}</h3>
+				<p class="mt-1 text-xs text-muted">{{ book.author || "Unknown author" }}</p>
 			</RouterLink>
 
 			<button
