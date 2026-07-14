@@ -1,16 +1,21 @@
 <script lang="ts" setup>
-	import { ref, onMounted } from "vue";
+	import { ref, computed, onMounted } from "vue";
 	import { X, ImagePlus } from "lucide-vue-next";
+	import type { Book } from "../stores/books";
+
+	const props = defineProps<{ book?: Book | null }>();
 
 	const emit = defineEmits<{
 		close: [];
-		create: [payload: { title: string; author: string; coverFile: File | null }];
+		submit: [payload: { title: string; author: string; coverFile: File | null }];
 	}>();
 
-	const title = ref("");
-	const author = ref("");
+	const isEdit = computed(() => !!props.book);
+
+	const title = ref(props.book?.title ?? "");
+	const author = ref(props.book?.author ?? "");
 	const coverFile = ref<File | null>(null);
-	const coverPreview = ref("");
+	const coverPreview = ref(props.book?.cover_image ?? "");
 	const titleInput = ref<HTMLInputElement | null>(null);
 
 	onMounted(() => titleInput.value?.focus());
@@ -18,12 +23,12 @@
 	function onCoverChange(e: Event) {
 		const file = (e.target as HTMLInputElement).files?.[0] ?? null;
 		coverFile.value = file;
-		coverPreview.value = file ? URL.createObjectURL(file) : "";
+		if (file) coverPreview.value = URL.createObjectURL(file);
 	}
 
 	function submit() {
 		if (!title.value.trim()) return;
-		emit("create", {
+		emit("submit", {
 			title: title.value.trim(),
 			author: author.value.trim(),
 			coverFile: coverFile.value,
@@ -35,7 +40,7 @@
 	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="emit('close')">
 		<div class="w-full max-w-lg rounded-lg border border-line bg-surface p-6 shadow-xl">
 			<div class="mb-5 flex items-center justify-between">
-				<h2 class="text-lg font-semibold text-ink">New book</h2>
+				<h2 class="text-lg font-semibold text-ink">{{ isEdit ? "Edit book" : "New book" }}</h2>
 				<button
 					aria-label="Close"
 					class="rounded-md p-1 text-muted transition hover:bg-canvas hover:text-ink"
@@ -94,7 +99,7 @@
 						<button
 							class="rounded-md bg-violet px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
 							type="submit">
-							Create
+							{{ isEdit ? "Save" : "Create" }}
 						</button>
 					</div>
 				</form>

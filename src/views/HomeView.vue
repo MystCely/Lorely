@@ -1,20 +1,35 @@
 <script lang="ts" setup>
 	import { ref, onMounted } from "vue";
 	import { storeToRefs } from "pinia";
-	import { Upload, FolderPlus, ArrowDownUp, Plus } from "lucide-vue-next";
-	import { useBooksStore } from "../stores/books";
+	import { Upload, FolderPlus, ArrowDownUp, Plus, Pencil } from "lucide-vue-next";
+	import { useBooksStore, type Book } from "../stores/books";
 	import NewBookModal from "../components/NewBookModal.vue";
 
 	const booksStore = useBooksStore();
 	const { books } = storeToRefs(booksStore);
-	const { addBook, fetchBooks } = booksStore;
+	const { addBook, updateBook, fetchBooks } = booksStore;
 
 	const showModal = ref(false);
+	const editingBook = ref<Book | null>(null);
 
 	onMounted(fetchBooks);
 
-	async function handleCreate(payload: { title: string; author: string; coverFile: File | null }) {
-		await addBook(payload);
+	function openCreate() {
+		editingBook.value = null;
+		showModal.value = true;
+	}
+
+	function openEdit(book: Book) {
+		editingBook.value = book;
+		showModal.value = true;
+	}
+
+	async function handleSubmit(payload: { title: string; author: string; coverFile: File | null }) {
+		if (editingBook.value) {
+			await updateBook(editingBook.value.id, payload);
+		} else {
+			await addBook(payload);
+		}
 		showModal.value = false;
 	}
 </script>
@@ -50,19 +65,26 @@
 						:src="book.cover_image"
 						alt=""
 						class="absolute inset-0 h-full w-full object-cover" />
+					<button
+						type="button"
+						aria-label="Edit book"
+						class="absolute right-2 top-2 cursor-pointer rounded-md bg-black/40 p-1.5 text-white opacity-0 backdrop-blur-sm transition hover:bg-black/60 group-hover:opacity-100"
+						@click.prevent.stop="openEdit(book)">
+						<Pencil class="h-4 w-4" />
+					</button>
 				</div>
 				<h3 class="mt-3 text-sm font-medium leading-tight text-ink">{{ book.title }}</h3>
 				<p class="mt-1 text-xs text-muted">{{ book.author || "Unknown author" }}</p>
 			</RouterLink>
 
 			<button
-				@click="showModal = true"
+				@click="openCreate()"
 				class="group/add flex aspect-2/3 w-36 cursor-pointer flex-col items-center justify-center gap-2 self-start rounded-md border-2 border-dashed border-line text-muted transition hover:border-violet hover:text-ink">
 				<Plus class="h-8 w-8 transition group-hover/add:scale-110" />
 				<span class="text-xs">New book</span>
 			</button>
 		</div>
 
-		<NewBookModal v-if="showModal" @close="showModal = false" @create="handleCreate" />
+		<NewBookModal v-if="showModal" :book="editingBook" @close="showModal = false" @submit="handleSubmit" />
 	</div>
 </template>

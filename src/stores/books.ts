@@ -21,23 +21,23 @@ export const useBooksStore = defineStore("books", () => {
 		books.value = data ?? [];
 	}
 
+	async function uploadCover(file: File): Promise<string> {
+		const { data: userData } = await supabase.auth.getUser();
+		const userId = userData.user?.id;
+		if (!userId) throw new Error("Not signed in");
+
+		const ext = file.name.split(".").pop();
+		const path = `${userId}/${crypto.randomUUID()}.${ext}`;
+
+		const { error: uploadError } = await supabase.storage.from("covers").upload(path, file);
+		if (uploadError) throw uploadError;
+
+		const { data: urlData } = supabase.storage.from("covers").getPublicUrl(path);
+		return urlData.publicUrl;
+	}
+
 	async function addBook(payload: { title: string; author: string; coverFile: File | null }) {
-		let coverUrl: string | null = null;
-
-		if (payload.coverFile) {
-			const { data: userData } = await supabase.auth.getUser();
-			const userId = userData.user?.id;
-			if (!userId) throw new Error("Not signed in");
-
-			const ext = payload.coverFile.name.split(".").pop();
-			const path = `${userId}/${crypto.randomUUID()}.${ext}`;
-
-			const { error: uploadError } = await supabase.storage.from("covers").upload(path, payload.coverFile);
-			if (uploadError) throw uploadError;
-
-			const { data: urlData } = supabase.storage.from("covers").getPublicUrl(path);
-			coverUrl = urlData.publicUrl;
-		}
+		const coverUrl = payload.coverFile ? await uploadCover(payload.coverFile) : null;
 
 		const { data, error } = await supabase
 			.from("books")
@@ -48,9 +48,25 @@ export const useBooksStore = defineStore("books", () => {
 		books.value.unshift(data);
 	}
 
+	async function updateBook(id: string, payload: { title: string; author: string; coverFile: File | null }) {
+		const updates: { title: string; author: string | null; cover_image?: string } = {
+			title: payload.title,
+			author: payload.author || null,
+		};
+		if (payload.coverFile) {
+			updates.cover_image = await uploadCover(payload.coverFile);
+		}
+
+		const { data, error } = await supabase.from("books").update(updates).eq("id", id).select().single();
+		if (error) throw error;
+
+		const index = books.value.findIndex((book) => book.id === id);
+		if (index !== -1) books.value[index] = data;
+	}
+
 	function getBook(id: string) {
 		return books.value.find((book) => book.id === id);
 	}
 
-	return { books, fetchBooks, addBook, getBook };
+	return { books, fetchBooks, addBook, updateBook, getBook };
 });
