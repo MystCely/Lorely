@@ -64,9 +64,15 @@ export const useBooksStore = defineStore("books", () => {
 		if (index !== -1) books.value[index] = data;
 	}
 
+	async function deleteBook(id: string) {
+		const { error } = await supabase.from("books").delete().eq("id", id);
+		if (error) throw error;
+		books.value = books.value.filter((book) => book.id !== id);
+	}
+
 	function getBook(id: string) {
 		return books.value.find((book) => book.id === id);
 	}
 
-	return { books, fetchBooks, addBook, updateBook, getBook };
+	return { books, fetchBooks, addBook, updateBook, deleteBook, getBook };
 });

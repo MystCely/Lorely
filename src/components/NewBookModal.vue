@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-	import { ref, computed, onMounted } from "vue";
+	import { ref, computed, onMounted, onUnmounted } from "vue";
 	import { X, ImagePlus } from "lucide-vue-next";
 	import type { Book } from "../stores/books";
 
@@ -18,7 +18,16 @@
 	const coverPreview = ref(props.book?.cover_image ?? "");
 	const titleInput = ref<HTMLInputElement | null>(null);
 
-	onMounted(() => titleInput.value?.focus());
+	function onKeyDown(e: KeyboardEvent) {
+		if (e.key === "Escape") emit("close");
+	}
+
+	onMounted(() => {
+		titleInput.value?.focus();
+		window.addEventListener("keydown", onKeyDown);
+	});
+
+	onUnmounted(() => window.removeEventListener("keydown", onKeyDown));
 
 	function onCoverChange(e: Event) {
 		const file = (e.target as HTMLInputElement).files?.[0] ?? null;
@@ -74,7 +83,7 @@
 						<input
 							id="title"
 							v-model="title"
-							autofocus
+							ref="titleInput"
 							class="rounded-md border border-line bg-canvas px-3 py-1.5 text-sm text-ink outline-none transition focus:border-violet"
 							required
 							type="text" />
