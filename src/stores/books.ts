@@ -1,32 +1,35 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
+import { supabase } from "../lib/supabaseClient";
 
 export interface Book {
-	id: number;
+	id: string;
 	title: string;
-	author: string;
-	wordCount: number;
+	author: string | null;
+	project_id: string | null;
+	cover_img: string | null;
+	default_color: string | null;
+	created_at: string;
 }
 
 export const useBooksStore = defineStore("books", () => {
-	const books = ref<Book[]>([
-		{ id: 1, title: "The Silver Thread", author: "Myst Sol", wordCount: 12400 },
-		{ id: 2, title: "Northwind", author: "Myst Sol", wordCount: 3000 },
-		{ id: 3, title: "Untitled Draft", author: "Myst Sol", wordCount: 0 },
-	]);
+	const books = ref<Book[]>([]);
 
-	function addBook() {
-		books.value.push({
-			id: Date.now(),
-			title: "Untitled Draft",
-			author: "",
-			wordCount: 0,
-		});
+	async function fetchBooks() {
+		const { data, error } = await supabase.from("books").select("*").order("created_at", { ascending: false });
+		if (error) throw error;
+		books.value = data ?? [];
 	}
 
-	function getBook(id: number) {
+	async function addBook() {
+		const { data, error } = await supabase.from("books").insert({ title: "Untitled Draft" }).select().single();
+		if (error) throw error;
+		books.value.unshift(data);
+	}
+
+	function getBook(id: string) {
 		return books.value.find((book) => book.id === id);
 	}
 
-	return { books, addBook, getBook };
+	return { books, fetchBooks, addBook, getBook };
 });

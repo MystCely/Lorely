@@ -3,21 +3,25 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-    --color-canvas: #F4F5F7;
-    --color-surface: #FCFCFD;
-    --color-line: #E4E6EA;
-    --color-ink: #1A1D23;
-    --color-muted: #667085;
-    --color-forest: #15803D;
-    --color-violet: #6D28D9;
+	--color-canvas: #f4f5f7;
+	--color-surface: #fcfcfd;
+	--color-line: #e4e6ea;
+	--color-ink: #1a1d23;
+	--color-muted: #667085;
+	--color-forest: #15803d;
+	--color-violet: #6d28d9;
 }
 
 .dark {
-    --color-canvas: #0E1013;
-    --color-surface: #16191F;
-    --color-line: #262B33;
-    --color-ink: #E7E9EC;
-    --color-muted: #8B929E;
-    --color-forest: #34C77B;
-    --color-violet: #8B5CF6;
+	--color-canvas: #0e1013;
+	--color-surface: #16191f;
+	--color-line: #262b33;
+	--color-ink: #e7e9ec;
+	--color-muted: #8b929e;
+	--color-forest: #34c77b;
+	--color-violet: #8b5cf6;
+}
+
+:root {
+	--nav-h: 4rem; /* = Tailwind h-16 = 64px */
 }

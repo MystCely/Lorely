@@ -4,7 +4,7 @@
 </script>
 
 <template>
-	<div class="flex min-h-[calc(100vh-4rem)]">
+	<div class="flex min-h-[calc(100vh-var(--nav-h))]">
 		<aside class="w-56 shrink-0 border-r border-line bg-surface p-4">
 			<nav class="flex flex-col gap-1">
 				<RouterLink

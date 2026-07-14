@@ -8,7 +8,7 @@
 	const route = useRoute();
 	const booksStore = useBooksStore();
 
-	const currentBook = computed(() => (route.params.id ? booksStore.getBook(Number(route.params.id)) : undefined));
+	const currentBook = computed(() => (route.params.id ? booksStore.getBook(String(route.params.id)) : undefined));
 
 	function setTheme(dark: boolean) {
 		document.documentElement.classList.toggle("dark", dark);
@@ -23,7 +23,7 @@
 </script>
 
 <template>
-	<header class="flex h-16 items-center justify-between border-b border-line bg-surface px-8">
+	<header class="flex h-(--nav-h) items-center justify-between border-b border-line bg-surface px-8">
 		<div class="flex items-center gap-3">
 			<RouterLink to="/" class="text-2xl font-bold tracking-tight text-ink">
 				Lorel

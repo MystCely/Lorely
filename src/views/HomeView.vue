@@ -1,11 +1,14 @@
 <script lang="ts" setup>
+	import { onMounted } from "vue";
 	import { storeToRefs } from "pinia";
 	import { Upload, FolderPlus, ArrowDownUp, Plus } from "lucide-vue-next";
 	import { useBooksStore } from "../stores/books";
 
 	const booksStore = useBooksStore();
 	const { books } = storeToRefs(booksStore);
-	const { addBook } = booksStore;
+	const { addBook, fetchBooks } = booksStore;
+
+	onMounted(fetchBooks);
 </script>
 
 <template>
@@ -36,7 +39,7 @@
 					class="flex aspect-2/3 items-end rounded-md bg-linear-to-br from-violet to-forest p-3 shadow-md transition group-hover:-translate-y-1 group-hover:shadow-xl">
 					<h3 class="text-sm font-semibold leading-tight text-white drop-shadow">{{ book.title }}</h3>
 				</div>
-				<p class="mt-2 text-xs text-muted">{{ book.wordCount.toLocaleString() }} words</p>
+				<p class="mt-2 text-xs text-muted">{{ book.author || "No author yet" }}</p>
 			</RouterLink>
 
 			<button
