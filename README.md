@@ -2,6 +2,10 @@
 
 A clean, distraction-free web app for drafting novels. Organize your manuscripts, write, and keep your work safe in the cloud.
 
+**Live demo:** [lorely-app.netlify.app](https://lorely-app.netlify.app)
+
+**Demo login:** `demo@example.com` / `Demo1234!` (or sign up with any email)
+
 I'm a fiction writer, and I wanted a calmer, less cluttered place to draft my novels than what I'd been using, so I started building one. Lorely is also where I put my full-stack skills into practice: real authentication, a database with per-user security, and cloud file storage, in a TypeScript codebase I care about keeping clean.
 
 ## Tech stack
@@ -13,6 +17,7 @@ I'm a fiction writer, and I wanted a calmer, less cluttered place to draft my no
 - **State:** Pinia
 - **Backend:** Supabase (Postgres, Auth, Storage, Row-Level Security)
 - **Icons:** lucide-vue-next
+- **Hosting:** Netlify
 - **Planned:** Tiptap (rich-text editor)
 
 ## Features
