@@ -15,6 +15,9 @@
 	const showModal = ref(false);
 	const editingBook = ref<Book | null>(null);
 
+	const saving = ref(false);
+	const submitError = ref("");
+
 	onMounted(fetchBooks);
 
 	function onKeyDown(e: KeyboardEvent) {
@@ -30,11 +33,13 @@
 
 	function openCreate() {
 		editingBook.value = null;
+		submitError.value = "";
 		showModal.value = true;
 	}
 
 	function openEdit(book: Book) {
 		editingBook.value = book;
+		submitError.value = "";
 		showModal.value = true;
 	}
 
@@ -45,12 +50,20 @@
 	}
 
 	async function handleSubmit(payload: { title: string; author: string; coverFile: File | null }) {
-		if (editingBook.value) {
-			await updateBook(editingBook.value.id, payload);
-		} else {
-			await addBook(payload);
+		saving.value = true;
+		submitError.value = "";
+		try {
+			if (editingBook.value) {
+				await updateBook(editingBook.value.id, payload);
+			} else {
+				await addBook(payload);
+			}
+			showModal.value = false;
+		} catch (err) {
+			submitError.value = err instanceof Error ? err.message : "Something went wrong. Please try again.";
+		} finally {
+			saving.value = false;
 		}
-		showModal.value = false;
 	}
 </script>
 
@@ -80,7 +93,7 @@
 			<div v-for="book in books" :key="book.id" class="w-36">
 				<RouterLink :to="`/book/${book.id}/editor`" class="group block">
 					<div
-						class="relative flex aspect-2/3 overflow-hidden rounded-md bg-linear-to-br from-violet to-forest shadow-md transition group-hover:-translate-y-1 group-hover:shadow-xl"
+						class="relative flex aspect-2/3 overflow-hidden rounded-md bg-linear-to-br from-grad-start to-grad-end shadow-md transition group-hover:-translate-y-1 group-hover:shadow-xl"
 						:class="{ '-translate-y-1 shadow-xl': openMenuId === book.id }">
 						<img
 							v-if="book.cover_image"
@@ -149,7 +162,13 @@
 		</div>
 
 		<div v-if="openMenuId" class="fixed inset-0 z-10" @click="openMenuId = null"></div>
-		<NewBookModal v-if="showModal" :book="editingBook" @close="showModal = false" @submit="handleSubmit" />
+		<NewBookModal
+			v-if="showModal"
+			:book="editingBook"
+			:saving="saving"
+			:error="submitError"
+			@close="showModal = false"
+			@submit="handleSubmit" />
 
 		<div
 			v-if="deletingBook"

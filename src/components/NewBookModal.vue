@@ -3,7 +3,10 @@
 	import { X, ImagePlus } from "lucide-vue-next";
 	import type { Book } from "../stores/books";
 
-	const props = defineProps<{ book?: Book | null }>();
+	const props = defineProps<{ book?: Book | null; saving?: boolean; error?: string }>();
+
+	const MAX_COVER_BYTES = 10 * 1024 * 1024;
+	const coverError = ref("");
 
 	const emit = defineEmits<{
 		close: [];
@@ -31,11 +34,18 @@
 
 	function onCoverChange(e: Event) {
 		const file = (e.target as HTMLInputElement).files?.[0] ?? null;
+		coverError.value = "";
+		if (file && file.size > MAX_COVER_BYTES) {
+			coverError.value = "That image is over 10 MB. Please choose a smaller one.";
+			coverFile.value = null;
+			return;
+		}
 		coverFile.value = file;
 		if (file) coverPreview.value = URL.createObjectURL(file);
 	}
 
 	function submit() {
+		if (props.saving) return;
 		if (!title.value.trim()) return;
 		emit("submit", {
 			title: title.value.trim(),
@@ -60,7 +70,7 @@
 
 			<div class="flex gap-5">
 				<label
-					class="group relative flex aspect-2/3 w-40 shrink-0 cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-md bg-linear-to-br from-violet to-forest text-white/90">
+					class="group relative flex aspect-2/3 w-40 shrink-0 cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-md bg-linear-to-br from-grad-start to-grad-end text-white/90">
 					<img v-if="coverPreview" :src="coverPreview" alt="" class="absolute inset-0 h-full w-full object-cover" />
 					<template v-else>
 						<ImagePlus class="h-6 w-6" />
@@ -99,6 +109,7 @@
 					</div>
 
 					<div class="mt-auto flex justify-end gap-2">
+						<p v-if="coverError || error" class="text-sm text-red-400">{{ coverError || error }}</p>
 						<button
 							class="rounded-md px-4 py-2 text-sm text-muted transition hover:bg-canvas hover:text-ink"
 							type="button"
@@ -106,9 +117,10 @@
 							Cancel
 						</button>
 						<button
-							class="rounded-md bg-violet px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
-							type="submit">
-							{{ isEdit ? "Save" : "Create" }}
+							class="cursor-pointer rounded-md bg-violet px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+							type="submit"
+							:disabled="saving">
+							{{ saving ? "Saving..." : isEdit ? "Save" : "Create" }}
 						</button>
 					</div>
 				</form>

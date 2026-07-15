@@ -8,8 +8,11 @@
 	--color-line: #e4e6ea;
 	--color-ink: #1a1d23;
 	--color-muted: #667085;
-	--color-forest: #15803d;
-	--color-violet: #6d28d9;
+	--color-forest: #6ee7b7;
+	--color-violet: #a78bfa;
+
+	--color-grad-start: #a78bfa;
+	--color-grad-end: #6ee7b7;
 
 	--font-sans: "Poppins", ui-sans-serif, system-ui, sans-serif;
 
@@ -24,6 +27,9 @@
 	--color-muted: #8b929e;
 	--color-forest: #34c77b;
 	--color-violet: #8b5cf6;
+
+	--color-grad-start: #8b5cf6;
+	--color-grad-end: #34c77b;
 }
 
 :root {

@@ -45,7 +45,7 @@
 			<button aria-label="Settings" class="rounded-md p-2 text-muted transition hover:bg-canvas hover:text-ink">
 				<Settings class="h-5 w-5" />
 			</button>
-			<div class="ml-2 h-9 w-9 rounded-full bg-linear-to-br from-violet to-forest"></div>
+			<div class="ml-2 h-9 w-9 rounded-full bg-linear-to-br from-grad-start to-grad-end"></div>
 		</div>
 	</header>
 </template>
