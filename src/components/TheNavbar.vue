@@ -1,12 +1,16 @@
 <script lang="ts" setup>
-	import { ref, onMounted, computed } from "vue";
-	import { useRoute } from "vue-router";
-	import { Sun, Moon, Settings } from "lucide-vue-next";
+	import { ref, onMounted, onUnmounted, computed } from "vue";
+	import { useRoute, useRouter } from "vue-router";
+	import { Sun, Moon, Settings, LogOut } from "lucide-vue-next";
 	import { useBooksStore } from "../stores/books";
+	import { useAuthStore } from "../stores/auth";
 
 	const isDark = ref(true);
+	const menuOpen = ref(false);
 	const route = useRoute();
+	const router = useRouter();
 	const booksStore = useBooksStore();
+	const auth = useAuthStore();
 
 	const currentBook = computed(() => (route.params.id ? booksStore.getBook(String(route.params.id)) : undefined));
 
@@ -16,10 +20,23 @@
 		isDark.value = dark;
 	}
 
+	async function handleSignOut() {
+		menuOpen.value = false;
+		await auth.signOut();
+		router.push({ name: "login" });
+	}
+
+	function onKeyDown(e: KeyboardEvent) {
+		if (e.key === "Escape") menuOpen.value = false;
+	}
+
 	onMounted(() => {
 		const saved = localStorage.getItem("theme");
 		setTheme(saved ? saved === "dark" : true);
+		window.addEventListener("keydown", onKeyDown);
 	});
+
+	onUnmounted(() => window.removeEventListener("keydown", onKeyDown));
 </script>
 
 <template>
@@ -34,18 +51,45 @@
 				<span class="text-lg font-semibold text-ink">{{ currentBook.title }}</span>
 			</template>
 		</div>
+
 		<div class="flex items-center gap-1">
 			<button
 				@click="setTheme(!isDark)"
 				aria-label="Toggle theme"
-				class="rounded-md p-2 text-muted transition hover:bg-canvas hover:text-ink">
+				class="cursor-pointer rounded-md p-2 text-muted transition hover:bg-canvas hover:text-ink">
 				<Sun v-if="isDark" class="h-5 w-5" />
 				<Moon v-else class="h-5 w-5" />
 			</button>
-			<button aria-label="Settings" class="rounded-md p-2 text-muted transition hover:bg-canvas hover:text-ink">
+
+			<button
+				v-if="auth.session"
+				aria-label="Settings"
+				class="cursor-pointer rounded-md p-2 text-muted transition hover:bg-canvas hover:text-ink">
 				<Settings class="h-5 w-5" />
 			</button>
-			<div class="ml-2 h-9 w-9 rounded-full bg-linear-to-br from-grad-start to-grad-end"></div>
+
+			<div v-if="auth.session" class="relative">
+				<button
+					type="button"
+					aria-label="Account menu"
+					class="ml-2 block h-9 w-9 cursor-pointer rounded-full bg-linear-to-br from-grad-start to-grad-end transition hover:opacity-90"
+					@click="menuOpen = !menuOpen"></button>
+
+				<div
+					v-if="menuOpen"
+					class="absolute right-0 top-full z-20 mt-2 w-56 overflow-hidden rounded-md border border-line bg-surface py-1 shadow-lg">
+					<p class="truncate border-b border-line px-3 py-2 text-xs text-muted">{{ auth.user?.email }}</p>
+					<button
+						type="button"
+						class="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-sm text-ink transition hover:bg-canvas"
+						@click="handleSignOut">
+						<LogOut class="h-4 w-4" />
+						Sign out
+					</button>
+				</div>
+			</div>
 		</div>
+
+		<div v-if="menuOpen" class="fixed inset-0 z-10" @click="menuOpen = false"></div>
 	</header>
 </template>

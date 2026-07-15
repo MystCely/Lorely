@@ -1,4 +1,5 @@
 import AuthView from "../views/AuthView.vue";
+import { useAuthStore } from "../stores/auth.ts";
 import { createRouter, createWebHistory } from "vue-router";
 import HomeView from "../views/HomeView.vue";
 import BookLayout from "../layouts/BookLayout.vue";
@@ -20,6 +21,17 @@ const router = createRouter({
 			],
 		},
 	],
+});
+
+router.beforeEach((to) => {
+	const auth = useAuthStore();
+
+	if (!auth.session && to.name !== "login") {
+		return { name: "login" };
+	}
+	if (auth.session && to.name === "login") {
+		return { name: "home" };
+	}
 });
 
 export default router;
