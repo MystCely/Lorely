@@ -8,6 +8,14 @@ A clean, distraction-free web app for drafting novels. Organize your manuscripts
 
 I'm a fiction writer, and I wanted a calmer, less cluttered place to draft my novels than what I'd been using, so I started building one. Lorely is also where I put my full-stack skills into practice: real authentication, a database with per-user security, and cloud file storage, in a TypeScript codebase I care about keeping clean.
 
+## Screenshots
+
+The manuscript library, in dark and light mode. Every color comes from a single set of theme tokens, so both modes stay in sync from one source of truth.
+
+![Lorely manuscript library in dark mode](screenshots/lorely-dark.png)
+
+![Lorely manuscript library in light mode](screenshots/lorely-light.png)
+
 ## Tech stack
 
 - **Framework:** Vue 3 + TypeScript (Composition API, `<script setup>`)
