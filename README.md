@@ -10,9 +10,11 @@ I'm a fiction writer, and I wanted a calmer, less cluttered place to draft my no
 
 ## Screenshots
 
-The manuscript library, in dark and light mode. Every color comes from a single set of theme tokens, so both modes stay in sync from one source of truth.
+The manuscript library, in dark and light mode.
 
 ![Lorely manuscript library in dark mode](screenshots/lorely-dark.png)
+
+---
 
 ![Lorely manuscript library in light mode](screenshots/lorely-light.png)
 
