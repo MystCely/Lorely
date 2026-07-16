@@ -33,5 +33,5 @@
 }
 
 :root {
-	--nav-h: 4rem; /* = Tailwind h-16 = 64px */
+	--nav-h: 4rem;
 }

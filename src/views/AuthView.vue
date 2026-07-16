@@ -2,6 +2,7 @@
 	import { ref } from "vue";
 	import { useRouter } from "vue-router";
 	import { useAuthStore } from "../stores/auth";
+	import { Feather } from "lucide-vue-next";
 
 	const auth = useAuthStore();
 	const router = useRouter();
@@ -54,9 +55,9 @@
 <template>
 	<div class="flex min-h-[calc(100vh-var(--nav-h))] items-center justify-center px-4">
 		<div class="w-full max-w-sm rounded-lg border border-line bg-surface p-8">
-			<h1 class="text-2xl font-bold tracking-tight text-ink">
-				Lorel
-				<span class="text-violet">y</span>
+			<h1 class="flex items-center gap-2 text-2xl font-bold tracking-tight text-ink">
+				Lorely
+				<Feather class="h-6 w-6 text-violet" />
 			</h1>
 			<p class="mt-1 text-sm text-muted">{{ subtitle[mode] }}</p>
 
@@ -108,7 +109,7 @@
 								v-if="mode === 'signin'"
 								type="button"
 								@click="setMode('forgot')"
-								class="cursor-pointer text-xs text-muted/50 transition hover:text-ink">
+								class="cursor-pointer text-xs text-muted/60 transition hover:text-ink">
 								Forgot password?
 							</button>
 						</div>

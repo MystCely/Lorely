@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 	import { ref, onMounted, onUnmounted, computed } from "vue";
 	import { useRoute, useRouter } from "vue-router";
-	import { Sun, Moon, Settings, LogOut } from "lucide-vue-next";
+	import { Feather, Sun, Moon, Settings, LogOut } from "lucide-vue-next";
 	import { useBooksStore } from "../stores/books";
 	import { useAuthStore } from "../stores/auth";
 
@@ -40,11 +40,12 @@
 </script>
 
 <template>
-	<header class="flex h-(--nav-h) items-center justify-between border-b border-line bg-surface px-8">
+	<header
+		class="sticky top-0 z-40 flex h-(--nav-h) items-center justify-between border-b border-line bg-surface/70 px-8 backdrop-blur-lg">
 		<div class="flex items-center gap-3">
-			<RouterLink to="/" class="text-2xl font-bold tracking-tight text-ink">
-				Lorel
-				<span class="text-violet">y</span>
+			<RouterLink to="/" class="flex items-center gap-2 text-2xl font-bold tracking-tight text-ink">
+				Lorely
+				<Feather class="h-6 w-6 text-violet" />
 			</RouterLink>
 			<template v-if="currentBook">
 				<span class="text-lg text-muted">/</span>
