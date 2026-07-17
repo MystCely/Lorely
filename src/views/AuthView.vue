@@ -49,6 +49,8 @@
 		errorMsg.value = "";
 		resetSent.value = false;
 		confirmSent.value = false;
+		email.value = "";
+		password.value = "";
 	}
 </script>
 
@@ -64,8 +66,8 @@
 			<div v-if="resetSent" class="mt-6">
 				<p class="text-sm text-ink">
 					If an account exists for
-					<span class="font-medium">{{ email }}</span>
-					, a reset link is on its way. Check your inbox.
+					<span class="font-medium">{{ email }},</span>
+					a reset link is on its way. Check your inbox.
 				</p>
 				<button
 					type="button"
@@ -78,8 +80,8 @@
 			<div v-else-if="confirmSent" class="mt-6">
 				<p class="text-sm text-ink">
 					Almost there. We sent a confirmation link to
-					<span class="font-medium">{{ email }}</span>
-					. Click it to activate your account, then sign in.
+					<span class="font-medium">{{ email }}.</span>
+					Click it to activate your account, then sign in.
 				</p>
 				<button
 					type="button"

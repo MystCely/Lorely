@@ -13,6 +13,9 @@
 	const auth = useAuthStore();
 
 	const currentBook = computed(() => (route.params.id ? booksStore.getBook(String(route.params.id)) : undefined));
+	const showAccountControls = computed(
+		() => !!auth.session && route.name !== "login" && route.name !== "reset-password",
+	);
 
 	function setTheme(dark: boolean) {
 		document.documentElement.classList.toggle("dark", dark);
@@ -41,7 +44,7 @@
 
 <template>
 	<header
-		class="sticky top-0 z-40 flex h-(--nav-h) items-center justify-between border-b border-line bg-surface/70 px-8 backdrop-blur-lg">
+		class="sticky top-0 z-40 flex h-(--nav-h) items-center justify-between border-b border-line bg-surface/80 px-8 backdrop-blur-lg">
 		<div class="flex items-center gap-3">
 			<RouterLink to="/" class="flex items-center gap-2 text-2xl font-bold tracking-tight text-ink">
 				Lorely
@@ -63,13 +66,13 @@
 			</button>
 
 			<button
-				v-if="auth.session"
+				v-if="showAccountControls"
 				aria-label="Settings"
 				class="cursor-pointer rounded-md p-2 text-muted transition hover:bg-canvas hover:text-ink">
 				<Settings class="h-5 w-5" />
 			</button>
 
-			<div v-if="auth.session" class="relative">
+			<div v-if="showAccountControls" class="relative">
 				<button
 					type="button"
 					aria-label="Account menu"
