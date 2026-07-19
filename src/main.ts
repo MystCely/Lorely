@@ -7,11 +7,10 @@ import { useAuthStore } from "./stores/auth.ts";
 
 const app = createApp(App);
 const pinia = createPinia();
+const auth = useAuthStore(pinia);
 app.use(pinia);
 app.use(router);
 
-useAuthStore(pinia)
-	.init()
-	.then(() => {
-		app.mount("#app");
-	});
+auth.ready.then(() => {
+	app.mount("#app");
+});

@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 	import { ref, onMounted, onBeforeUnmount } from "vue";
-	import { useRoute } from "vue-router";
+	import { useRoute, useRouter } from "vue-router";
 	import { storeToRefs } from "pinia";
 	import { useEditor, EditorContent } from "@tiptap/vue-3";
 	import StarterKit from "@tiptap/starter-kit";
@@ -27,33 +27,91 @@
 	import { useEditorUiStore } from "../stores/editorUi";
 
 	const route = useRoute();
+	const router = useRouter();
 	const chaptersStore = useChaptersStore();
 	const { chapters } = storeToRefs(chaptersStore);
-	const { fetchChapters, addChapter, getChapter } = chaptersStore;
+	const { fetchChapters, addChapter, getChapter, updateChapter } = chaptersStore;
 
 	const editorUi = useEditorUiStore();
 	const { chaptersCollapsed } = storeToRefs(editorUi);
 
 	const activeChapterId = ref<string | null>(null);
 	const loading = ref(true);
+	const saveState = ref<"idle" | "saving" | "saved" | "error">("idle");
+	let saveTimer: ReturnType<typeof setTimeout> | undefined;
+	let isLoadingChapter = false;
 
 	const editor = useEditor({
 		extensions: [StarterKit],
 		content: "",
 		editorProps: { attributes: { class: "prose dark:prose-invert max-w-none min-h-[70vh] focus:outline-none" } },
+		onUpdate: () => {
+			if (isLoadingChapter) return;
+			scheduleSave();
+		},
 	});
 
 	onMounted(async () => {
 		await fetchChapters(String(route.params.id));
 		loading.value = false;
-		if (chapters.value.length) selectChapter(chapters.value[0].id);
+
+		const wanted = route.query.chapter as string | undefined;
+		const initial = chapters.value.find((c) => c.id === wanted) ?? chapters.value[0];
+		if (initial) selectChapter(initial.id);
+
+		window.addEventListener("keydown", onKeyDown);
 	});
 
-	onBeforeUnmount(() => editor.value?.destroy());
+	onBeforeUnmount(() => {
+		if (saveTimer) {
+			clearTimeout(saveTimer);
+			saveActiveChapter();
+		}
+		editor?.value?.destroy();
 
-	function selectChapter(id: string) {
+		window.removeEventListener("keydown", onKeyDown);
+	});
+
+	function onKeyDown(e: KeyboardEvent) {
+		if ((e.metaKey || e.ctrlKey) && e.key.toLocaleLowerCase() === "s") {
+			e.preventDefault();
+			clearTimeout(saveTimer);
+			saveTimer = undefined;
+			saveActiveChapter();
+		}
+	}
+
+	async function selectChapter(id: string) {
+		if (id === activeChapterId.value) return;
+
+		clearTimeout(saveTimer);
+		saveTimer = undefined;
+		saveActiveChapter();
+
 		activeChapterId.value = id;
+		isLoadingChapter = true;
 		editor.value?.commands.setContent(getChapter(id)?.content ?? "");
+		isLoadingChapter = false;
+
+		router.replace({ query: { ...route.query, chapter: id } });
+	}
+
+	async function saveActiveChapter() {
+		if (!activeChapterId.value || !editor.value) return;
+		const id = activeChapterId.value;
+		saveState.value = "saving";
+		try {
+			await updateChapter(id, { content: editor.value.getJSON() });
+			saveState.value = "saved";
+		} catch {
+			saveState.value = "error";
+		}
+	}
+
+	function scheduleSave() {
+		saveState.value = "saving";
+		clearTimeout(saveTimer);
+		saveTimer = setTimeout(saveActiveChapter, 800);
 	}
 
 	async function handleAddChapter() {
@@ -121,9 +179,12 @@
 				:class="{ 'bg-canvas text-ink': editor?.isActive('orderedList') }">
 				<ListOrdered class="h-4 w-4" />
 			</button>
+
+			<span v-if="saveState !== 'idle'" class="ml-auto pr-1 text-xs text-muted">
+				{{ saveState === "saving" ? "Saving..." : saveState === "error" ? "Couldn't save" : "Saved" }}
+			</span>
 		</div>
 
-		<!-- Main row: rail | chapters | editor | right sidebar -->
 		<div class="flex min-h-0 flex-1 gap-3">
 			<!-- Icon rail -->
 			<nav class="panel flex w-16 shrink-0 flex-col items-center gap-4 rounded-2xl py-4">

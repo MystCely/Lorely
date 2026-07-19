@@ -7,14 +7,15 @@ export const useAuthStore = defineStore("auth", () => {
 	const session = ref<Session | null>(null);
 	const user = computed(() => session.value?.user ?? null);
 
-	async function init() {
-		const { data } = await supabase.auth.getSession();
-		session.value = data.session;
+	let resolveReady = () => {};
+	const ready = new Promise<void>((resolve) => {
+		resolveReady = resolve;
+	});
 
-		supabase.auth.onAuthStateChange((_event, newSession) => {
-			session.value = newSession;
-		});
-	}
+	supabase.auth.onAuthStateChange((_event, newSession) => {
+		session.value = newSession;
+		resolveReady();
+	});
 
 	async function signUp(email: string, password: string) {
 		const { data, error } = await supabase.auth.signUp({ email, password });
@@ -44,5 +45,5 @@ export const useAuthStore = defineStore("auth", () => {
 		if (error) throw error;
 	}
 
-	return { session, user, init, signUp, signIn, signOut, resetPasswordForEmail, updatePassword };
+	return { session, user, ready, signUp, signIn, signOut, resetPasswordForEmail, updatePassword };
 });

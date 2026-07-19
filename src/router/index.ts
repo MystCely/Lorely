@@ -25,8 +25,9 @@ const router = createRouter({
 	],
 });
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
 	const auth = useAuthStore();
+	await auth.ready;
 
 	if (!auth.session && to.name !== "login" && to.name !== "reset-password") {
 		return { name: "login" };
