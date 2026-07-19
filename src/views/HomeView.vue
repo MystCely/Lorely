@@ -180,13 +180,13 @@
 				<div class="mt-6 flex justify-end gap-2">
 					<button
 						type="button"
-						class="cursor-pointer rounded-md px-4 py-2 text-sm text-muted transition hover:bg-canvas hover:text-ink"
+						class="cursor-pointer rounded-full px-4 py-2 text-sm text-muted transition hover:bg-canvas hover:text-ink"
 						@click="deletingBook = null">
 						Cancel
 					</button>
 					<button
 						type="button"
-						class="cursor-pointer rounded-md bg-red-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-600"
+						class="cursor-pointer rounded-full bg-red-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-600"
 						@click="confirmDelete">
 						Delete
 					</button>

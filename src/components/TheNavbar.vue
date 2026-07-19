@@ -44,7 +44,7 @@
 
 <template>
 	<header
-		class="sticky top-0 z-40 flex h-(--nav-h) items-center justify-between border-b border-line bg-surface/80 px-8 backdrop-blur-lg">
+		class="sticky top-0 z-40 flex h-(--nav-h) items-center justify-between border-b border-line bg-surface/30 px-8 backdrop-blur-xl">
 		<div class="flex items-center gap-3">
 			<RouterLink to="/" class="flex items-center gap-2 text-2xl font-bold tracking-tight text-ink">
 				Lorely
