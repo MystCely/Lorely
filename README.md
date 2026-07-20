@@ -2,7 +2,7 @@
 
 A clean, distraction-free web app for drafting novels. Organize your manuscripts, write, and keep your work safe in the cloud.
 
-**Live demo:** [lorely-app.netlify.app](https://lorely-app.netlify.app)
+**Live demo:** [lorely-write.vercel.app](https://lorely-write.vercel.app)
 
 **Demo login:** `demo@example.com` / `Demo1234!` (or sign up with any email)
 
@@ -13,8 +13,6 @@ I'm a fiction writer, and I wanted a calmer, less cluttered place to draft my no
 The manuscript library, in dark and light mode.
 
 ![Lorely manuscript library in dark mode](screenshots/lorely-dark.png)
-
----
 
 ![Lorely manuscript library in light mode](screenshots/lorely-light.png)
 
