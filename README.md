@@ -25,7 +25,7 @@ The manuscript library, in dark and light mode.
 - **State:** Pinia
 - **Backend:** Supabase (Postgres, Auth, Storage, Row-Level Security)
 - **Icons:** lucide-vue-next
-- **Hosting:** Netlify
+- **Hosting:** Vercel
 - **Planned:** Tiptap (rich-text editor)
 
 ## Features
