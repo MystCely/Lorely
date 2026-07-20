@@ -111,7 +111,7 @@
 	function scheduleSave() {
 		saveState.value = "saving";
 		clearTimeout(saveTimer);
-		saveTimer = setTimeout(saveActiveChapter, 800);
+		saveTimer = setTimeout(saveActiveChapter, 1500);
 	}
 
 	async function handleAddChapter() {
@@ -121,7 +121,7 @@
 </script>
 
 <template>
-	<div class="flex h-full flex-col gap-3 p-3">
+	<div class="flex h-full flex-col gap-6 p-3">
 		<!-- Full-width toolbar -->
 		<div class="panel flex items-center gap-1 rounded-2xl px-3 py-2">
 			<button
@@ -180,7 +180,7 @@
 				<ListOrdered class="h-4 w-4" />
 			</button>
 
-			<span v-if="saveState !== 'idle'" class="ml-auto pr-1 text-xs text-muted">
+			<span v-if="saveState !== 'idle'" class="ml-auto pr-3 text-xs text-muted">
 				{{ saveState === "saving" ? "Saving..." : saveState === "error" ? "Couldn't save" : "Saved" }}
 			</span>
 		</div>
@@ -214,7 +214,7 @@
 
 			<!-- Chapters sidebar (collapsible) -->
 			<div
-				class="shrink-0 overflow-hidden transition-all duration-300 ease-out"
+				class="shrink-0 overflow-hidden rounded-2xl transition-all duration-300 ease-out"
 				:class="chaptersCollapsed ? 'w-0 opacity-0' : 'w-72 opacity-100'">
 				<aside class="panel flex h-full w-72 flex-col rounded-2xl">
 					<div class="flex gap-2 p-4">
