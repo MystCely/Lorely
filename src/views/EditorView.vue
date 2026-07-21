@@ -22,24 +22,34 @@
 		Target,
 		Timer,
 		BookOpen,
+		Trash2,
+		Pencil,
 	} from "lucide-vue-next";
-	import { useChaptersStore } from "../stores/chapters";
+	import { useChaptersStore, type Chapter } from "../stores/chapters";
+	import { useBooksStore } from "../stores/books";
 	import { useEditorUiStore } from "../stores/editorUi";
 
 	const route = useRoute();
 	const router = useRouter();
 	const chaptersStore = useChaptersStore();
+	const booksStore = useBooksStore();
 	const { chapters } = storeToRefs(chaptersStore);
-	const { fetchChapters, addChapter, getChapter, updateChapter } = chaptersStore;
+	const { fetchChapters, addChapter, getChapter, updateChapter, deleteChapter } = chaptersStore;
 
 	const editorUi = useEditorUiStore();
 	const { chaptersCollapsed } = storeToRefs(editorUi);
+
+	const editingChapterId = ref<string | null>(null);
+	const editingTitle = ref("");
+	const deletingChapter = ref<Chapter | null>(null);
 
 	const activeChapterId = ref<string | null>(null);
 	const loading = ref(true);
 	const saveState = ref<"idle" | "saving" | "saved" | "error">("idle");
 	let saveTimer: ReturnType<typeof setTimeout> | undefined;
 	let isLoadingChapter = false;
+
+	const vFocus = { mounted: (el: HTMLElement) => el.focus() };
 
 	const editor = useEditor({
 		extensions: [StarterKit],
@@ -53,6 +63,7 @@
 
 	onMounted(async () => {
 		await fetchChapters(String(route.params.id));
+		booksStore.fetchBook(String(route.params.id));
 		loading.value = false;
 
 		const wanted = route.query.chapter as string | undefined;
@@ -117,6 +128,41 @@
 	async function handleAddChapter() {
 		const chapter = await addChapter(String(route.params.id));
 		selectChapter(chapter.id);
+	}
+
+	function startRename(chapter: Chapter) {
+		editingChapterId.value = chapter.id;
+		editingTitle.value = chapter.title;
+	}
+
+	async function saveRename() {
+		const id = editingChapterId.value;
+		if (!id) return;
+		editingChapterId.value = null;
+		const title = editingTitle.value.trim();
+		if (title && title !== getChapter(id)?.title) await updateChapter(id, { title });
+	}
+
+	function cancelRename() {
+		editingChapterId.value = null;
+	}
+
+	async function confirmDeleteChapter() {
+		const chapter = deletingChapter.value;
+		if (!chapter) return;
+		const wasActive = activeChapterId.value === chapter.id;
+		if (wasActive) {
+			clearTimeout(saveTimer);
+			saveTimer = undefined;
+			activeChapterId.value = null;
+		}
+		await deleteChapter(chapter.id);
+		deletingChapter.value = null;
+		if (wasActive) {
+			const next = chapters.value[0];
+			if (next) selectChapter(next.id);
+			else editor.value?.commands.setContent("");
+		}
 	}
 </script>
 
@@ -235,21 +281,54 @@
 					<div class="flex-1 overflow-y-auto px-3 pb-3">
 						<p v-if="loading" class="px-2 py-1 text-sm text-muted">Loading…</p>
 						<p v-else-if="!chapters.length" class="px-2 py-1 text-sm text-muted">No chapters yet.</p>
+						<!-- Chapter list -->
 						<nav v-else class="flex flex-col gap-1">
-							<button
+							<div
 								v-for="chapter in chapters"
 								:key="chapter.id"
-								type="button"
-								@click="selectChapter(chapter.id)"
-								class="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition"
+								class="group flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition"
 								:class="
-									chapter.id === activeChapterId
-										? 'bg-canvas font-medium text-ink'
-										: 'text-muted hover:bg-canvas/60 hover:text-ink'
+									editingChapterId === chapter.id
+										? ''
+										: chapter.id === activeChapterId
+											? 'bg-canvas font-medium text-ink'
+											: 'text-muted hover:bg-canvas/60 hover:text-ink'
 								">
-								<FileText class="h-4 w-4 shrink-0" />
-								<span class="truncate">{{ chapter.title }}</span>
-							</button>
+								<div v-if="editingChapterId === chapter.id" class="relative w-full">
+									<FileText class="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted" />
+									<input
+										v-focus
+										v-model="editingTitle"
+										@keydown.enter.prevent="saveRename"
+										@keydown.esc="cancelRename"
+										@blur="cancelRename"
+										class="w-full rounded-2xl border border-line bg-canvas py-3 pl-12 pr-4 text-sm text-ink outline-none transition focus:border-violet" />
+								</div>
+
+								<template v-else>
+									<FileText class="h-4 w-4 shrink-0" />
+									<button
+										type="button"
+										@click="selectChapter(chapter.id)"
+										class="min-w-0 flex-1 cursor-pointer truncate text-left">
+										{{ chapter.title }}
+									</button>
+									<button
+										type="button"
+										aria-label="Rename chapter"
+										@click.stop="startRename(chapter)"
+										class="shrink-0 cursor-pointer rounded p-1 text-muted opacity-0 transition hover:bg-canvas hover:text-ink group-hover:opacity-100">
+										<Pencil class="h-3.5 w-3.5" />
+									</button>
+									<button
+										type="button"
+										aria-label="Delete chapter"
+										@click.stop="deletingChapter = chapter"
+										class="shrink-0 cursor-pointer rounded p-1 text-muted opacity-0 transition hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100">
+										<Trash2 class="h-3.5 w-3.5" />
+									</button>
+								</template>
+							</div>
 						</nav>
 					</div>
 				</aside>
@@ -289,6 +368,29 @@
 					<p class="mt-1.5 text-xs text-muted">Coming soon</p>
 				</div>
 			</aside>
+		</div>
+		<div
+			v-if="deletingChapter"
+			class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+			@click.self="deletingChapter = null">
+			<div class="w-full max-w-sm rounded-2xl border border-line bg-surface p-6 shadow-xl">
+				<h2 class="text-lg font-semibold text-ink">Delete chapter</h2>
+				<p class="mt-2 text-sm text-muted">Delete “{{ deletingChapter.title }}”? This can’t be undone.</p>
+				<div class="mt-6 flex justify-end gap-2">
+					<button
+						type="button"
+						class="cursor-pointer rounded-full px-5 py-2 text-sm text-muted transition hover:bg-canvas hover:text-ink"
+						@click="deletingChapter = null">
+						Cancel
+					</button>
+					<button
+						type="button"
+						class="cursor-pointer rounded-full bg-red-500 px-5 py-2 text-sm font-medium text-white transition hover:bg-red-600"
+						@click="confirmDeleteChapter">
+						Delete
+					</button>
+				</div>
+			</div>
 		</div>
 	</div>
 </template>

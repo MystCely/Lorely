@@ -21,6 +21,20 @@ export const useBooksStore = defineStore("books", () => {
 		books.value = data ?? [];
 	}
 
+	async function fetchBook(id: string) {
+		if (getBook(id)) return;
+		const { data, error } = await supabase.from("books").select("*").eq("id", id).single();
+		if (error) throw error;
+		books.value.push(data);
+	}
+
+	async function renameBook(id: string, title: string) {
+		const { data, error } = await supabase.from("books").update({ title }).eq("id", id).select().single();
+		if (error) throw error;
+		const index = books.value.findIndex((book) => book.id === id);
+		if (index !== -1) books.value[index] = data;
+	}
+
 	async function uploadCover(file: File): Promise<string> {
 		const { data: userData } = await supabase.auth.getUser();
 		const userId = userData.user?.id;
@@ -74,5 +88,5 @@ export const useBooksStore = defineStore("books", () => {
 		return books.value.find((book) => book.id === id);
 	}
 
-	return { books, fetchBooks, addBook, updateBook, deleteBook, getBook };
+	return { books, fetchBooks, fetchBook, renameBook, addBook, updateBook, deleteBook, getBook };
 });

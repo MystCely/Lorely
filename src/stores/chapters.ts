@@ -44,9 +44,15 @@ export const useChaptersStore = defineStore("chapters", () => {
 		if (index !== -1) chapters.value[index] = data;
 	}
 
+	async function deleteChapter(id: string) {
+		const { error } = await supabase.from("chapters").delete().eq("id", id);
+		if (error) throw error;
+		chapters.value = chapters.value.filter((c) => c.id !== id);
+	}
+
 	function getChapter(id: string) {
 		return chapters.value.find((chapter) => chapter.id === id);
 	}
 
-	return { chapters, fetchChapters, addChapter, updateChapter, getChapter };
+	return { chapters, fetchChapters, addChapter, updateChapter, deleteChapter, getChapter };
 });

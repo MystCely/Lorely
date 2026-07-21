@@ -12,10 +12,33 @@
 	const booksStore = useBooksStore();
 	const auth = useAuthStore();
 
+	const editingBookTitle = ref(false);
+	const bookTitleDraft = ref("");
+
+	const vFocus = { mounted: (el: HTMLElement) => el.focus() };
+
 	const currentBook = computed(() => (route.params.id ? booksStore.getBook(String(route.params.id)) : undefined));
 	const showAccountControls = computed(
 		() => !!auth.session && route.name !== "login" && route.name !== "reset-password",
 	);
+
+	function startBookRename() {
+		if (!currentBook.value) return;
+		bookTitleDraft.value = currentBook.value.title;
+		editingBookTitle.value = true;
+	}
+
+	function cancelBookRename() {
+		editingBookTitle.value = false;
+	}
+
+	async function saveBookRename() {
+		editingBookTitle.value = false;
+		const title = bookTitleDraft.value.trim();
+		if (currentBook.value && title && title !== currentBook.value.title) {
+			await booksStore.renameBook(currentBook.value.id, title);
+		}
+	}
 
 	function setTheme(dark: boolean) {
 		document.documentElement.classList.toggle("dark", dark);
@@ -52,7 +75,20 @@
 			</RouterLink>
 			<template v-if="currentBook">
 				<span class="text-lg text-muted">/</span>
-				<span class="text-lg font-semibold text-ink">{{ currentBook.title }}</span>
+				<input
+					v-if="editingBookTitle"
+					v-focus
+					v-model="bookTitleDraft"
+					@keydown.enter.prevent="saveBookRename"
+					@keydown.esc="cancelBookRename"
+					@blur="cancelBookRename"
+					class="rounded-2xl border border-line bg-canvas px-4 py-2 text-lg font-semibold text-ink outline-none transition focus:border-violet" />
+				<span
+					v-else
+					@dblclick="startBookRename"
+					class="cursor-pointer select-none text-lg font-semibold text-ink transition hover:text-violet">
+					{{ currentBook.title }}
+				</span>
 			</template>
 		</div>
 
