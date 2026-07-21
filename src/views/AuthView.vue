@@ -72,7 +72,7 @@
 </script>
 
 <template>
-	<div class="flex min-h-[calc(100vh-var(--nav-h))] items-center justify-center px-4 py-10">
+	<div class="flex min-h-[calc(100vh-var(--nav-h))] items-center justify-center px-4 py-4">
 		<div class="w-full max-w-md rounded-2xl border border-line bg-surface p-8">
 			<RouterLink to="/" class="flex items-center justify-center gap-2.5">
 				<span class="flex h-11 w-11 items-center justify-center rounded-2xl bg-violet/15">
