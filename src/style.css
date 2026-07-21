@@ -37,6 +37,10 @@
 	--nav-h: 5rem;
 }
 
+html {
+	background-color: var(--color-canvas);
+}
+
 .panel {
 	background-color: var(--color-surface);
 	border: 1px solid var(--color-line);
