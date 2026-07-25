@@ -8,6 +8,7 @@
 		Plus,
 		Download,
 		FileText,
+		FileDown,
 		PanelLeft,
 		BookText,
 		LayoutGrid,
@@ -28,6 +29,7 @@
 	import { useChaptersStore, type Chapter } from "../stores/chapters";
 	import { useBooksStore } from "../stores/books";
 	import { useEditorUiStore } from "../stores/editorUi";
+	import { exportToPdf } from "../lib/exportPdf";
 
 	const route = useRoute();
 	const router = useRouter();
@@ -38,6 +40,9 @@
 
 	const editorUi = useEditorUiStore();
 	const { chaptersCollapsed } = storeToRefs(editorUi);
+
+	const showExport = ref(false);
+	const selectedIds = ref<Set<string>>(new Set());
 
 	const editingChapterId = ref<string | null>(null);
 	const editingTitle = ref("");
@@ -164,6 +169,34 @@
 			else editor.value?.commands.setContent("");
 		}
 	}
+
+	function openExport() {
+		selectedIds.value = new Set(chapters.value.map((c) => c.id));
+		showExport.value = true;
+	}
+
+	function toggleExportChapter(id: string) {
+		const next = new Set(selectedIds.value);
+		next.has(id) ? next.delete(id) : next.add(id);
+		selectedIds.value = next;
+	}
+
+	async function runExportPdf() {
+		await saveActiveChapter();
+		const book = booksStore.getBook(String(route.params.id));
+		const chosen = chapters.value
+			.filter((c) => selectedIds.value.has(c.id))
+			.map((c) => ({ title: c.title, content: c.content }));
+		await exportToPdf(book?.title ?? "Manuscript", book?.author ?? "", chosen);
+		showExport.value = false;
+
+		try {
+			await exportToPdf(book?.title ?? "Manuscript", book?.author ?? "", chosen);
+		} catch (e) {
+			console.error("Export failed:", e);
+		}
+		showExport.value = false;
+	}
 </script>
 
 <template>
@@ -252,6 +285,13 @@
 				</button>
 				<button
 					type="button"
+					aria-label="Export"
+					@click="openExport"
+					class="cursor-pointer rounded-full p-2.5 text-muted transition hover:bg-canvas hover:text-ink">
+					<FileDown class="h-5 w-5" />
+				</button>
+				<button
+					type="button"
 					aria-label="Settings"
 					class="mt-auto cursor-pointer rounded-full p-2.5 text-muted transition hover:bg-canvas hover:text-ink">
 					<Settings class="h-5 w-5" />
@@ -335,17 +375,17 @@
 			</div>
 
 			<!-- Editor -->
-			<main class="flex-1 overflow-y-auto">
+			<main class="min-w-0 flex-1 overflow-y-auto">
 				<div
 					v-if="activeChapterId"
-					class="mx-auto mb-8 max-w-3xl rounded-xs border border-line bg-surface px-16 py-14 shadow-sm">
+					class="mx-auto mb-8 max-w-3xl rounded-xs border border-line bg-surface px-6 py-8 md:px-10 lg:px-16 lg:py-14 shadow-sm">
 					<EditorContent :editor="editor" />
 				</div>
 				<p v-else-if="!loading" class="p-8 text-sm text-muted">Select or create a chapter to start writing.</p>
 			</main>
 
 			<!-- Right sidebar (placeholders) -->
-			<aside class="panel flex w-72 shrink-0 flex-col gap-4 overflow-y-auto rounded-2xl p-4">
+			<aside class="panel hidden w-72 shrink-0 flex-col gap-4 overflow-y-auto rounded-2xl p-4 xl:flex">
 				<div class="rounded-xl bg-canvas/40 p-4">
 					<div class="flex items-center gap-2 text-sm font-medium text-ink">
 						<Target class="h-4 w-4" />
@@ -388,6 +428,43 @@
 						class="cursor-pointer rounded-full bg-red-500 px-5 py-2 text-sm font-medium text-white transition hover:bg-red-600"
 						@click="confirmDeleteChapter">
 						Delete
+					</button>
+				</div>
+			</div>
+		</div>
+		<div
+			v-if="showExport"
+			class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+			@click.self="showExport = false">
+			<div class="w-full max-w-md rounded-2xl border border-line bg-surface p-6 shadow-xl">
+				<h2 class="text-lg font-semibold text-ink">Export to PDF</h2>
+				<p class="mt-1 text-sm text-muted">Choose which chapters to include.</p>
+				<div class="mt-4 max-h-64 space-y-1 overflow-y-auto">
+					<label
+						v-for="chapter in chapters"
+						:key="chapter.id"
+						class="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-ink transition hover:bg-canvas">
+						<input
+							type="checkbox"
+							:checked="selectedIds.has(chapter.id)"
+							@change="toggleExportChapter(chapter.id)"
+							class="h-4 w-4 accent-violet" />
+						<span class="truncate">{{ chapter.title }}</span>
+					</label>
+				</div>
+				<div class="mt-6 flex justify-end gap-2">
+					<button
+						type="button"
+						class="cursor-pointer rounded-full px-5 py-2 text-sm text-muted transition hover:bg-canvas hover:text-ink"
+						@click="showExport = false">
+						Cancel
+					</button>
+					<button
+						type="button"
+						:disabled="selectedIds.size === 0"
+						class="cursor-pointer rounded-full bg-violet px-5 py-2 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+						@click="runExportPdf">
+						Export PDF
 					</button>
 				</div>
 			</div>
