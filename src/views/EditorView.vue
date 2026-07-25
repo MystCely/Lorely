@@ -187,8 +187,6 @@
 		const chosen = chapters.value
 			.filter((c) => selectedIds.value.has(c.id))
 			.map((c) => ({ title: c.title, content: c.content }));
-		await exportToPdf(book?.title ?? "Manuscript", book?.author ?? "", chosen);
-		showExport.value = false;
 
 		try {
 			await exportToPdf(book?.title ?? "Manuscript", book?.author ?? "", chosen);
