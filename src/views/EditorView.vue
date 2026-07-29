@@ -30,6 +30,7 @@
 	import { useBooksStore } from "../stores/books";
 	import { useEditorUiStore } from "../stores/editorUi";
 	import { exportToPdf } from "../lib/exportPdf";
+	import { exportToDocx } from "../lib/exportDocx";
 
 	const route = useRoute();
 	const router = useRouter();
@@ -53,6 +54,14 @@
 	const saveState = ref<"idle" | "saving" | "saved" | "error">("idle");
 	let saveTimer: ReturnType<typeof setTimeout> | undefined;
 	let isLoadingChapter = false;
+
+	const formats = [
+		{ value: "pdf", label: "PDF", soon: false },
+		{ value: "docx", label: "Word", soon: false },
+		{ value: "epub", label: "ePub", soon: true },
+	] as const;
+
+	const format = ref<"pdf" | "docx" | "epub">("pdf");
 
 	const vFocus = { mounted: (el: HTMLElement) => el.focus() };
 
@@ -181,15 +190,18 @@
 		selectedIds.value = next;
 	}
 
-	async function runExportPdf() {
+	async function runExport() {
 		await saveActiveChapter();
 		const book = booksStore.getBook(String(route.params.id));
+		const title = book?.title ?? "Manuscript";
+		const author = book?.author ?? "";
 		const chosen = chapters.value
 			.filter((c) => selectedIds.value.has(c.id))
 			.map((c) => ({ title: c.title, content: c.content }));
 
 		try {
-			await exportToPdf(book?.title ?? "Manuscript", book?.author ?? "", chosen);
+			if (format.value === "pdf") await exportToPdf(title, author, chosen);
+			else if (format.value === "docx") await exportToDocx(title, author, chosen);
 		} catch (e) {
 			console.error("Export failed:", e);
 		}
@@ -435,9 +447,30 @@
 			class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
 			@click.self="showExport = false">
 			<div class="w-full max-w-md rounded-2xl border border-line bg-surface p-6 shadow-xl">
-				<h2 class="text-lg font-semibold text-ink">Export to PDF</h2>
-				<p class="mt-1 text-sm text-muted">Choose which chapters to include.</p>
-				<div class="mt-4 max-h-64 space-y-1 overflow-y-auto">
+				<h2 class="text-xl font-semibold text-ink">Export</h2>
+				<p class="mt-1 my-8 text-sm text-muted">Choose a format and the chapters to include.</p>
+
+				<p class="mt-5 mb-2 text-m font-medium text-ink">Format</p>
+				<div class="flex gap-2">
+					<button
+						v-for="f in formats"
+						:key="f.value"
+						type="button"
+						:disabled="f.soon"
+						@click="format = f.value"
+						class="flex-1 cursor-pointer rounded-xl border px-4 py-2.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-40"
+						:class="
+							format === f.value
+								? 'border-violet bg-violet/10 text-violet'
+								: 'border-line text-muted hover:bg-canvas hover:text-ink'
+						">
+						{{ f.label }}
+						<span v-if="f.soon" class="ml-1 text-xs">soon</span>
+					</button>
+				</div>
+
+				<p class="mt-5 mb-2 text-m font-medium text-ink">Chapters</p>
+				<div class="max-h-56 space-y-1 overflow-y-auto">
 					<label
 						v-for="chapter in chapters"
 						:key="chapter.id"
@@ -450,6 +483,7 @@
 						<span class="truncate">{{ chapter.title }}</span>
 					</label>
 				</div>
+
 				<div class="mt-6 flex justify-end gap-2">
 					<button
 						type="button"
@@ -461,8 +495,8 @@
 						type="button"
 						:disabled="selectedIds.size === 0"
 						class="cursor-pointer rounded-full bg-violet px-5 py-2 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-						@click="runExportPdf">
-						Export PDF
+						@click="runExport">
+						Export
 					</button>
 				</div>
 			</div>

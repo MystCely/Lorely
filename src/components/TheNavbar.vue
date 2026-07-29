@@ -77,16 +77,16 @@
 				<span class="text-lg text-muted">/</span>
 				<input
 					v-if="editingBookTitle"
-					v-focus
 					v-model="bookTitleDraft"
-					@keydown.enter.prevent="saveBookRename"
-					@keydown.esc="cancelBookRename"
+					v-focus
+					class="rounded-2xl border border-line bg-canvas px-4 py-2 text-lg font-semibold text-ink outline-none transition focus:border-violet"
 					@blur="cancelBookRename"
-					class="rounded-2xl border border-line bg-canvas px-4 py-2 text-lg font-semibold text-ink outline-none transition focus:border-violet" />
+					@keydown.enter.prevent="saveBookRename"
+					@keydown.esc="cancelBookRename" />
 				<span
 					v-else
-					@dblclick="startBookRename"
-					class="cursor-pointer select-none text-lg font-semibold text-ink transition hover:text-violet">
+					class="cursor-pointer select-none text-lg font-semibold text-ink transition hover:text-violet"
+					@dblclick="startBookRename">
 					{{ currentBook.title }}
 				</span>
 			</template>
@@ -94,9 +94,9 @@
 
 		<div class="flex items-center gap-1">
 			<button
-				@click="setTheme(!isDark)"
 				aria-label="Toggle theme"
-				class="cursor-pointer rounded-md p-2 text-muted transition hover:bg-canvas hover:text-ink">
+				class="cursor-pointer rounded-md p-2 text-muted transition hover:bg-canvas hover:text-ink"
+				@click="setTheme(!isDark)">
 				<Sun v-if="isDark" class="h-5 w-5" />
 				<Moon v-else class="h-5 w-5" />
 			</button>
@@ -110,18 +110,20 @@
 
 			<div v-if="showAccountControls" class="relative">
 				<button
-					type="button"
 					aria-label="Account menu"
 					class="ml-2 block h-9 w-9 cursor-pointer rounded-full bg-linear-to-br from-grad-start to-grad-end transition hover:opacity-90"
+					type="button"
 					@click="menuOpen = !menuOpen"></button>
 
 				<div
 					v-if="menuOpen"
 					class="absolute right-0 top-full z-20 mt-2 w-56 overflow-hidden rounded-md border border-line bg-surface py-1 shadow-lg">
-					<p class="truncate border-b border-line px-3 py-2 text-xs text-muted">{{ auth.user?.email }}</p>
+					<p class="truncate border-b border-line px-3 py-2 text-xs text-muted">
+						{{ auth.user?.email }}
+					</p>
 					<button
-						type="button"
 						class="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-sm text-ink transition hover:bg-canvas"
+						type="button"
 						@click="handleSignOut">
 						<LogOut class="h-4 w-4" />
 						Sign out
