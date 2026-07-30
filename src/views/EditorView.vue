@@ -29,8 +29,10 @@
 	import { useChaptersStore, type Chapter } from "../stores/chapters";
 	import { useBooksStore } from "../stores/books";
 	import { useEditorUiStore } from "../stores/editorUi";
+
 	import { exportToPdf } from "../lib/exportPdf";
 	import { exportToDocx } from "../lib/exportDocx";
+	import { exportToEpub } from "../lib/exportEpub";
 
 	const route = useRoute();
 	const router = useRouter();
@@ -58,7 +60,7 @@
 	const formats = [
 		{ value: "pdf", label: "PDF", soon: false },
 		{ value: "docx", label: "Word", soon: false },
-		{ value: "epub", label: "ePub", soon: true },
+		{ value: "epub", label: "ePub", soon: false },
 	] as const;
 
 	const format = ref<"pdf" | "docx" | "epub">("pdf");
@@ -202,6 +204,7 @@
 		try {
 			if (format.value === "pdf") await exportToPdf(title, author, chosen);
 			else if (format.value === "docx") await exportToDocx(title, author, chosen);
+			else if (format.value === "epub") await exportToEpub(title, author, chosen);
 		} catch (e) {
 			console.error("Export failed:", e);
 		}
