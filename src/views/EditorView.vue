@@ -4,6 +4,9 @@
 	import { storeToRefs } from "pinia";
 	import { useEditor, EditorContent } from "@tiptap/vue-3";
 	import StarterKit from "@tiptap/starter-kit";
+	import TextAlign from "@tiptap/extension-text-align";
+	import { PageBreak } from "../lib/pageBreak";
+
 	import {
 		Plus,
 		Download,
@@ -31,7 +34,13 @@
 		Minus,
 		Undo2,
 		Redo2,
+		AlignLeft,
+		AlignCenter,
+		AlignRight,
+		AlignJustify,
+		SeparatorHorizontal,
 	} from "lucide-vue-next";
+
 	import { useChaptersStore, type Chapter } from "../stores/chapters";
 	import { useBooksStore } from "../stores/books";
 	import { useEditorUiStore } from "../stores/editorUi";
@@ -74,7 +83,7 @@
 	const vFocus = { mounted: (el: HTMLElement) => el.focus() };
 
 	const editor = useEditor({
-		extensions: [StarterKit],
+		extensions: [StarterKit, TextAlign.configure({ types: ["heading", "paragraph"] }), PageBreak],
 		content: "",
 		editorProps: { attributes: { class: "prose dark:prose-invert max-w-none min-h-[70vh] focus:outline-none" } },
 		onUpdate: () => {
@@ -307,7 +316,37 @@
 				:class="{ 'bg-canvas text-ink': editor?.isActive('orderedList') }">
 				<ListOrdered class="h-4 w-4" />
 			</button>
+
 			<div class="mx-2 h-5 w-px bg-line"></div>
+
+			<button
+				type="button"
+				@click="editor?.chain().focus().setTextAlign('left').run()"
+				class="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-canvas hover:text-ink"
+				:class="{ 'bg-canvas text-ink': editor?.isActive({ textAlign: 'left' }) }">
+				<AlignLeft class="h-4 w-4" />
+			</button>
+			<button
+				type="button"
+				@click="editor?.chain().focus().setTextAlign('center').run()"
+				class="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-canvas hover:text-ink"
+				:class="{ 'bg-canvas text-ink': editor?.isActive({ textAlign: 'center' }) }">
+				<AlignCenter class="h-4 w-4" />
+			</button>
+			<button
+				type="button"
+				@click="editor?.chain().focus().setTextAlign('right').run()"
+				class="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-canvas hover:text-ink"
+				:class="{ 'bg-canvas text-ink': editor?.isActive({ textAlign: 'right' }) }">
+				<AlignRight class="h-4 w-4" />
+			</button>
+			<button
+				type="button"
+				@click="editor?.chain().focus().setTextAlign('justify').run()"
+				class="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-canvas hover:text-ink"
+				:class="{ 'bg-canvas text-ink': editor?.isActive({ textAlign: 'justify' }) }">
+				<AlignJustify class="h-4 w-4" />
+			</button>
 
 			<button
 				type="button"
@@ -316,12 +355,20 @@
 				:class="{ 'bg-canvas text-ink': editor?.isActive('blockquote') }">
 				<Quote class="h-4 w-4" />
 			</button>
+
 			<button
 				type="button"
 				aria-label="Scene break"
 				@click="editor?.chain().focus().setHorizontalRule().run()"
 				class="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-canvas hover:text-ink">
 				<Minus class="h-4 w-4" />
+			</button>
+			<button
+				type="button"
+				aria-label="Page break"
+				@click="editor?.chain().focus().setPageBreak().run()"
+				class="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-canvas hover:text-ink">
+				<SeparatorHorizontal class="h-4 w-4" />
 			</button>
 
 			<span v-if="saveState !== 'idle'" class="ml-auto pr-3 text-xs text-muted">

@@ -72,3 +72,21 @@ html {
 		transparent 70%
 	);
 }
+
+.ProseMirror div[data-page-break] {
+	position: relative;
+	margin: 2rem 0;
+	border-top: 2px dashed var(--color-line);
+}
+
+.ProseMirror div[data-page-break]::after {
+	content: "Page break";
+	position: absolute;
+	top: -0.65rem;
+	left: 50%;
+	transform: translateX(-50%);
+	background: var(--color-surface);
+	padding: 0 0.5rem;
+	font-size: 0.7rem;
+	color: var(--color-muted);
+}

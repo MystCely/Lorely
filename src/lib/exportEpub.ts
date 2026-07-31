@@ -5,7 +5,7 @@ type TNode = {
 	text?: string;
 	content?: TNode[];
 	marks?: { type: string }[];
-	attrs?: { level?: number };
+	attrs?: { level?: number; textAlign?: string };
 };
 
 function escapeHtml(s: string) {
@@ -57,12 +57,18 @@ function toHtml(doc: TNode): string {
 	let html = "";
 	for (const node of doc.content ?? []) {
 		switch (node.type) {
-			case "paragraph":
-				html += `<p>${inline(node)}</p>`;
+			case "paragraph": {
+				const align = node.attrs?.textAlign;
+				html += `<p${align ? ` style="text-align:${align}"` : ""}>${inline(node)}</p>`;
+				break;
+			}
+			case "pageBreak":
+				html += `<div style="page-break-after: always;"></div>`;
 				break;
 			case "heading": {
 				const level = Math.min(node.attrs?.level ?? 1, 6);
-				html += `<h${level}>${inline(node)}</h${level}>`;
+				const align = node.attrs?.textAlign;
+				html += `<h${level}${align ? ` style="text-align:${align}"` : ""}>${inline(node)}</h${level}>`;
 				break;
 			}
 			case "bulletList":

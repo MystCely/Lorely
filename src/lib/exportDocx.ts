@@ -1,14 +1,21 @@
-import { AlignmentType, Document, HeadingLevel, LevelFormat, Packer, Paragraph, TextRun } from "docx";
+import { AlignmentType, Document, HeadingLevel, LevelFormat, Packer, Paragraph, TextRun, PageBreak } from "docx";
 
 type TNode = {
 	type?: string;
 	text?: string;
 	content?: TNode[];
 	marks?: { type: string }[];
-	attrs?: { level?: number };
+	attrs?: { level?: number; textAlign?: string };
 };
 
 const HEADINGS = [HeadingLevel.HEADING_1, HeadingLevel.HEADING_2, HeadingLevel.HEADING_3];
+
+const ALIGN: Record<string, any> = {
+	left: AlignmentType.LEFT,
+	center: AlignmentType.CENTER,
+	right: AlignmentType.RIGHT,
+	justify: AlignmentType.JUSTIFIED,
+};
 
 function runsOf(node: TNode): TextRun[] {
 	const out: TextRun[] = [];
@@ -52,7 +59,16 @@ function bodyParagraphs(doc: TNode): Paragraph[] {
 	for (const node of doc.content ?? []) {
 		switch (node.type) {
 			case "paragraph":
-				out.push(new Paragraph({ children: runsOf(node), spacing: { after: 120 } }));
+				out.push(
+					new Paragraph({
+						children: runsOf(node),
+						spacing: { after: 120 },
+						...(node.attrs?.textAlign ? { alignment: ALIGN[node.attrs.textAlign] } : {}),
+					}),
+				);
+				break;
+			case "pageBreak":
+				out.push(new Paragraph({ children: [new PageBreak()] }));
 				break;
 			case "heading":
 				out.push(
@@ -60,6 +76,7 @@ function bodyParagraphs(doc: TNode): Paragraph[] {
 						children: runsOf(node),
 						heading: HEADINGS[(node.attrs?.level ?? 1) - 1] ?? HeadingLevel.HEADING_3,
 						spacing: { before: 240, after: 120 },
+						...(node.attrs?.textAlign ? { alignment: ALIGN[node.attrs.textAlign] } : {}),
 					}),
 				);
 				break;

@@ -3,7 +3,7 @@ type TNode = {
 	text?: string;
 	content?: TNode[];
 	marks?: { type: string }[];
-	attrs?: { level?: number };
+	attrs?: { level?: number; textAlign?: string };
 };
 
 async function loadFont(url: string): Promise<string> {
@@ -84,10 +84,21 @@ function blocks(doc: TNode): any[] {
 	for (const node of doc.content ?? []) {
 		switch (node.type) {
 			case "paragraph":
-				out.push({ text: runs(node), style: "para" });
+				out.push({
+					text: runs(node),
+					style: "para",
+					...(node.attrs?.textAlign ? { alignment: node.attrs.textAlign } : {}),
+				});
 				break;
 			case "heading":
-				out.push({ text: runs(node), style: `h${node.attrs?.level ?? 1}` });
+				out.push({
+					text: runs(node),
+					style: `h${node.attrs?.level ?? 1}`,
+					...(node.attrs?.textAlign ? { alignment: node.attrs.textAlign } : {}),
+				});
+				break;
+			case "pageBreak":
+				out.push({ text: "", pageBreak: "after" });
 				break;
 			case "bulletList":
 				out.push({ ul: listItems(node), style: "para" });
