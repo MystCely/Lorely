@@ -96,17 +96,40 @@ function bodyParagraphs(doc: TNode): Paragraph[] {
 	return out;
 }
 
-export async function exportToDocx(bookTitle: string, author: string, chapters: { title: string; content: any }[]) {
+export async function exportToDocx(
+	bookTitle: string,
+	author: string,
+	chapters: { title: string; content: any }[],
+	project?: string | null,
+) {
 	const children: Paragraph[] = [
 		new Paragraph({
 			children: [new TextRun({ text: bookTitle, bold: true, size: 56 })],
 			alignment: AlignmentType.CENTER,
-			spacing: { before: 3600, after: 400 },
+			spacing: { before: 3600, after: 200 },
 		}),
-		new Paragraph({
-			children: [new TextRun({ text: author ? `by ${author}` : "", italics: true, size: 28 })],
-			alignment: AlignmentType.CENTER,
-		}),
+		...(project
+			? [
+					new Paragraph({
+						children: [new TextRun({ text: project, size: 32, color: "555555" })],
+						alignment: AlignmentType.CENTER,
+						spacing: { after: 800 },
+					}),
+				]
+			: []),
+		...(author
+			? [
+					new Paragraph({
+						children: [new TextRun({ text: "by", size: 22 })],
+						alignment: AlignmentType.CENTER,
+						spacing: { after: 120 },
+					}),
+					new Paragraph({
+						children: [new TextRun({ text: author, size: 28 })],
+						alignment: AlignmentType.CENTER,
+					}),
+				]
+			: []),
 		new Paragraph({
 			children: [new TextRun({ text: "Contents", bold: true, size: 40 })],
 			pageBreakBefore: true,

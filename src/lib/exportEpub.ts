@@ -94,18 +94,19 @@ function xhtml(title: string, body: string) {
 </html>`;
 }
 
-export async function exportToEpub(bookTitle: string, author: string, chapters: { title: string; content: any }[]) {
+export async function exportToEpub(
+	bookTitle: string,
+	author: string,
+	chapters: { title: string; content: any }[],
+	coverUrl?: string | null,
+	project?: string | null,
+) {
 	const zip = new JSZip();
 	const uuid = crypto.randomUUID();
 	const modified = new Date().toISOString().replace(/\.\d+Z$/, "Z");
-	const files = chapters.map((ch, i) => ({
-		...ch,
-		id: `ch${i + 1}`,
-		href: `chapter-${i + 1}.xhtml`,
-	}));
+	const files = chapters.map((ch, i) => ({ ...ch, id: `ch${i + 1}`, href: `chapter-${i + 1}.xhtml` }));
 
 	zip.file("mimetype", "application/epub+zip", { compression: "STORE" });
-
 	zip.file(
 		"META-INF/container.xml",
 		`<?xml version="1.0" encoding="UTF-8"?>
@@ -120,8 +121,92 @@ export async function exportToEpub(bookTitle: string, author: string, chapters: 
 		"style.css",
 		`body { font-family: Georgia, serif; line-height: 1.5; margin: 1em; }
 h1.chapter-title { text-align: center; margin: 2em 0 1.5em; }
-p { margin: 0 0 0.8em; text-align: justify; }`,
+p { margin: 0 0 0.8em; text-align: justify; }
+.cover { text-align: center; margin: 0; padding: 0; }
+.cover img { max-width: 100%; max-height: 100%; }
+.title-page { text-align: center; margin-top: 22%; }
+.title-page h1 { font-size: 2.4em; font-weight: bold; margin: 0 0 0.3em; text-align: center; }
+.title-page .project { font-size: 1.3em; color: #555; margin: 0 0 2.2em; text-align: center; }
+.title-page .by { font-size: 0.8em; margin: 0 0 0.8em; text-align: center; }
+.title-page .author { font-size: 1.1em; margin: 0; text-align: center; }
+.contents-title { text-align: center; font-size: 1.8em; margin: 1.5em 0 2em; }
+.contents p { margin: 0 0 0.7em; text-align: left; }
+.contents a { text-decoration: none; }`,
 	);
+
+	// Cover image (optional, skipped silently if it can't be fetched)
+	let coverFile: { href: string; mime: string } | null = null;
+	if (coverUrl) {
+		try {
+			const res = await fetch(coverUrl);
+			if (res.ok) {
+				const buf = await res.arrayBuffer();
+				const ext = (coverUrl.split("?")[0].split(".").pop() ?? "jpg").toLowerCase();
+				const mime = ext === "png" ? "image/png" : ext === "gif" ? "image/gif" : "image/jpeg";
+				const href = `cover.${ext === "png" ? "png" : ext === "gif" ? "gif" : "jpg"}`;
+				oebps.file(href, buf);
+				coverFile = { href, mime };
+			}
+		} catch {
+			// no cover, continue without it
+		}
+	}
+
+	if (coverFile) {
+		oebps.file(
+			"cover.xhtml",
+			`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>Cover</title><link rel="stylesheet" type="text/css" href="style.css"/></head>
+<body class="cover"><img src="${coverFile.href}" alt="${escapeHtml(bookTitle)}"/></body>
+</html>`,
+		);
+	}
+
+	oebps.file(
+		"title.xhtml",
+		`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>${escapeHtml(bookTitle)}</title><link rel="stylesheet" type="text/css" href="style.css"/></head>
+<body><div class="title-page">
+<h1>${escapeHtml(bookTitle)}</h1>
+${project ? `<p class="project">${escapeHtml(project)}</p>` : ""}
+${author ? `<p class="by">by</p><p class="author">${escapeHtml(author)}</p>` : ""}
+</div></body>
+</html>`,
+	);
+
+	oebps.file(
+		"contents.xhtml",
+		`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>Contents</title><link rel="stylesheet" type="text/css" href="style.css"/></head>
+<body><h1 class="contents-title">Contents</h1><div class="contents">
+${files.map((f) => `<p><a href="${f.href}">${escapeHtml(f.title)}</a></p>`).join("\n")}
+</div></body>
+</html>`,
+	);
+
+	oebps.file(
+		"nav.xhtml",
+		`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+<head><title>Contents</title></head>
+<body><nav epub:type="toc" id="toc"><h1>Contents</h1><ol>
+<li><a href="title.xhtml">Title page</a></li>
+<li><a href="contents.xhtml">Contents</a></li>
+${files.map((f) => `<li><a href="${f.href}">${escapeHtml(f.title)}</a></li>`).join("\n")}
+</ol></nav></body>
+</html>`,
+	);
+
+	for (const f of files) {
+		oebps.file(f.href, xhtml(f.title, f.content ? toHtml(f.content) : "<p></p>"));
+	}
 
 	oebps.file(
 		"content.opf",
@@ -133,38 +218,27 @@ p { margin: 0 0 0.8em; text-align: justify; }`,
 <dc:language>en</dc:language>
 <dc:creator>${escapeHtml(author || "Unknown author")}</dc:creator>
 <meta property="dcterms:modified">${modified}</meta>
+${coverFile ? `<meta name="cover" content="cover-image"/>` : ""}
 </metadata>
 <manifest>
 <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
 <item id="css" href="style.css" media-type="text/css"/>
+${coverFile ? `<item id="cover-image" href="${coverFile.href}" media-type="${coverFile.mime}" properties="cover-image"/>` : ""}
+${coverFile ? `<item id="cover" href="cover.xhtml" media-type="application/xhtml+xml"/>` : ""}
+<item id="title" href="title.xhtml" media-type="application/xhtml+xml"/>
+<item id="contents" href="contents.xhtml" media-type="application/xhtml+xml"/>
 ${files.map((f) => `<item id="${f.id}" href="${f.href}" media-type="application/xhtml+xml"/>`).join("\n")}
 </manifest>
 <spine>
+${coverFile ? `<itemref idref="cover"/>` : ""}
+<itemref idref="title"/>
+<itemref idref="contents"/>
 ${files.map((f) => `<itemref idref="${f.id}"/>`).join("\n")}
 </spine>
 </package>`,
 	);
 
-	oebps.file(
-		"nav.xhtml",
-		`<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
-<head><title>Contents</title></head>
-<body><nav epub:type="toc" id="toc"><h1>Contents</h1><ol>
-${files.map((f) => `<li><a href="${f.href}">${escapeHtml(f.title)}</a></li>`).join("\n")}
-</ol></nav></body>
-</html>`,
-	);
-
-	for (const f of files) {
-		oebps.file(f.href, xhtml(f.title, f.content ? toHtml(f.content) : "<p></p>"));
-	}
-
-	const blob = await zip.generateAsync({
-		type: "blob",
-		mimeType: "application/epub+zip",
-	});
+	const blob = await zip.generateAsync({ type: "blob", mimeType: "application/epub+zip" });
 	const url = URL.createObjectURL(blob);
 	const link = document.createElement("a");
 	link.href = url;

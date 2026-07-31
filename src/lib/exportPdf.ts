@@ -109,12 +109,24 @@ function blocks(doc: TNode): any[] {
 	return out;
 }
 
-export async function exportToPdf(bookTitle: string, author: string, chapters: { title: string; content: any }[]) {
+export async function exportToPdf(
+	bookTitle: string,
+	author: string,
+	chapters: { title: string; content: any }[],
+	project?: string | null,
+) {
 	const { pdfMake, vfs, fonts } = await loadPdfMake();
 
 	const content: any[] = [
-		{ text: bookTitle, style: "bookTitle", margin: [0, 220, 0, 16] },
-		{ text: author ? `by ${author}` : "", style: "bookAuthor", pageBreak: "after" },
+		{ text: bookTitle, style: "bookTitle", margin: [0, 200, 0, 10] },
+		...(project ? [{ text: project, style: "bookProject" }] : []),
+		...(author
+			? [
+					{ text: "by", style: "bookBy" },
+					{ text: author, style: "bookAuthor" },
+				]
+			: []),
+		{ text: "", pageBreak: "after" },
 		{ toc: { title: { text: "Contents", style: "tocTitle" } } },
 	];
 
@@ -131,7 +143,9 @@ export async function exportToPdf(bookTitle: string, author: string, chapters: {
 		content,
 		styles: {
 			bookTitle: { fontSize: 30, bold: true, alignment: "center" },
-			bookAuthor: { fontSize: 16, italics: true, alignment: "center" },
+			bookProject: { fontSize: 16, color: "#555555", alignment: "center", margin: [0, 0, 0, 60] },
+			bookBy: { fontSize: 11, alignment: "center", margin: [0, 0, 0, 8] },
+			bookAuthor: { fontSize: 14, alignment: "center" },
 			tocTitle: { fontSize: 22, bold: true, margin: [0, 0, 0, 20] },
 			chapterTitle: { fontSize: 22, bold: true, alignment: "center", margin: [0, 40, 0, 30] },
 			h1: { fontSize: 18, bold: true, margin: [0, 14, 0, 8] },

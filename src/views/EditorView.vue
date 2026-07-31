@@ -204,7 +204,7 @@
 		try {
 			if (format.value === "pdf") await exportToPdf(title, author, chosen);
 			else if (format.value === "docx") await exportToDocx(title, author, chosen);
-			else if (format.value === "epub") await exportToEpub(title, author, chosen);
+			else if (format.value === "epub") await exportToEpub(title, author, chosen, book?.cover_image);
 		} catch (e) {
 			console.error("Export failed:", e);
 		}
