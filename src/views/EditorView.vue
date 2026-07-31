@@ -25,6 +25,12 @@
 		BookOpen,
 		Trash2,
 		Pencil,
+		Underline,
+		Heading3,
+		Quote,
+		Minus,
+		Undo2,
+		Redo2,
 	} from "lucide-vue-next";
 	import { useChaptersStore, type Chapter } from "../stores/chapters";
 	import { useBooksStore } from "../stores/books";
@@ -218,6 +224,22 @@
 		<div class="panel flex items-center gap-1 rounded-2xl px-3 py-2">
 			<button
 				type="button"
+				@click="editor?.chain().focus().undo().run()"
+				:disabled="!editor?.can().undo()"
+				class="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-canvas hover:text-ink disabled:cursor-not-allowed disabled:opacity-30">
+				<Undo2 class="h-4 w-4" />
+			</button>
+			<button
+				type="button"
+				@click="editor?.chain().focus().redo().run()"
+				:disabled="!editor?.can().redo()"
+				class="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-canvas hover:text-ink disabled:cursor-not-allowed disabled:opacity-30">
+				<Redo2 class="h-4 w-4" />
+			</button>
+
+			<div class="mx-2 h-5 w-px bg-line"></div>
+			<button
+				type="button"
 				@click="editor?.chain().focus().toggleBold().run()"
 				class="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-canvas hover:text-ink"
 				:class="{ 'bg-canvas text-ink': editor?.isActive('bold') }">
@@ -229,6 +251,13 @@
 				class="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-canvas hover:text-ink"
 				:class="{ 'bg-canvas text-ink': editor?.isActive('italic') }">
 				<Italic class="h-4 w-4" />
+			</button>
+			<button
+				type="button"
+				@click="editor?.chain().focus().toggleUnderline().run()"
+				class="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-canvas hover:text-ink"
+				:class="{ 'bg-canvas text-ink': editor?.isActive('underline') }">
+				<Underline class="h-4 w-4" />
 			</button>
 			<button
 				type="button"
@@ -254,6 +283,13 @@
 				:class="{ 'bg-canvas text-ink': editor?.isActive('heading', { level: 2 }) }">
 				<Heading2 class="h-4 w-4" />
 			</button>
+			<button
+				type="button"
+				@click="editor?.chain().focus().toggleHeading({ level: 3 }).run()"
+				class="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-canvas hover:text-ink"
+				:class="{ 'bg-canvas text-ink': editor?.isActive('heading', { level: 3 }) }">
+				<Heading3 class="h-4 w-4" />
+			</button>
 
 			<div class="mx-2 h-5 w-px bg-line"></div>
 
@@ -270,6 +306,22 @@
 				class="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-canvas hover:text-ink"
 				:class="{ 'bg-canvas text-ink': editor?.isActive('orderedList') }">
 				<ListOrdered class="h-4 w-4" />
+			</button>
+			<div class="mx-2 h-5 w-px bg-line"></div>
+
+			<button
+				type="button"
+				@click="editor?.chain().focus().toggleBlockquote().run()"
+				class="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-canvas hover:text-ink"
+				:class="{ 'bg-canvas text-ink': editor?.isActive('blockquote') }">
+				<Quote class="h-4 w-4" />
+			</button>
+			<button
+				type="button"
+				aria-label="Scene break"
+				@click="editor?.chain().focus().setHorizontalRule().run()"
+				class="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-canvas hover:text-ink">
+				<Minus class="h-4 w-4" />
 			</button>
 
 			<span v-if="saveState !== 'idle'" class="ml-auto pr-3 text-xs text-muted">
