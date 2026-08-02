@@ -2,10 +2,14 @@
 	import { ref, onMounted, onBeforeUnmount } from "vue";
 	import { useRoute, useRouter } from "vue-router";
 	import { storeToRefs } from "pinia";
+
 	import { useEditor, EditorContent } from "@tiptap/vue-3";
 	import StarterKit from "@tiptap/starter-kit";
 	import TextAlign from "@tiptap/extension-text-align";
+	import type { JSONContent } from "@tiptap/vue-3";
+
 	import { PageBreak } from "../lib/pageBreak";
+	import { countWords } from "../lib/wordCount.ts";
 
 	import {
 		Plus,
@@ -39,11 +43,13 @@
 		AlignRight,
 		AlignJustify,
 		SeparatorHorizontal,
+		History,
 	} from "lucide-vue-next";
 
 	import { useChaptersStore, type Chapter } from "../stores/chapters";
 	import { useBooksStore } from "../stores/books";
 	import { useEditorUiStore } from "../stores/editorUi";
+	import { useVersionsStore, type ChapterVersion } from "../stores/versions.ts";
 
 	import { exportToPdf } from "../lib/exportPdf";
 	import { exportToDocx } from "../lib/exportDocx";
@@ -51,13 +57,26 @@
 
 	const route = useRoute();
 	const router = useRouter();
+
 	const chaptersStore = useChaptersStore();
 	const booksStore = useBooksStore();
+	const editorUi = useEditorUiStore();
+	const versionStore = useVersionsStore();
+
+	const { versions } = storeToRefs(versionStore);
 	const { chapters } = storeToRefs(chaptersStore);
+	const { chaptersCollapsed } = storeToRefs(editorUi);
+
 	const { fetchChapters, addChapter, getChapter, updateChapter, deleteChapter } = chaptersStore;
 
-	const editorUi = useEditorUiStore();
-	const { chaptersCollapsed } = storeToRefs(editorUi);
+	const showHistory = ref(false);
+
+	const SNAPSHOT_INTERVAL = 10 * 60 * 1000;
+	const lastSnapshotAt = new Map<string, number>();
+	const sessionBaseline = new Map<string, JSONContent>();
+	const lastSnapshotJson = new Map<string, string>();
+	const pendingRestore = ref<ChapterVersion | null>(null);
+	const pendingDeleteVersion = ref<ChapterVersion | null>(null);
 
 	const showExport = ref(false);
 	const selectedIds = ref<Set<string>>(new Set());
@@ -115,6 +134,24 @@
 	});
 
 	function onKeyDown(e: KeyboardEvent) {
+		if (e.key === "Escape") {
+			if (pendingDeleteVersion.value) return;
+			if (pendingRestore.value) {
+				pendingRestore.value = null;
+				return;
+			}
+			if (showHistory.value) {
+				showHistory.value = false;
+				return;
+			}
+			if (showExport.value) {
+				showExport.value = false;
+				return;
+			}
+			// Delete-chapter dialog deliberately ignores Escape.
+			return;
+		}
+
 		if ((e.metaKey || e.ctrlKey) && e.key.toLocaleLowerCase() === "s") {
 			e.preventDefault();
 			clearTimeout(saveTimer);
@@ -133,6 +170,8 @@
 		activeChapterId.value = id;
 		isLoadingChapter = true;
 		editor.value?.commands.setContent(getChapter(id)?.content ?? "");
+		const loaded = getChapter(id)?.content;
+		if (loaded) sessionBaseline.set(id, loaded);
 		isLoadingChapter = false;
 
 		router.replace({ query: { ...route.query, chapter: id } });
@@ -143,8 +182,10 @@
 		const id = activeChapterId.value;
 		saveState.value = "saving";
 		try {
-			await updateChapter(id, { content: editor.value.getJSON() });
+			const json = editor.value.getJSON();
+			await updateChapter(id, { content: json });
 			saveState.value = "saved";
+			maybeSnapshot(id, json);
 		} catch {
 			saveState.value = "error";
 		}
@@ -225,6 +266,82 @@
 		}
 		showExport.value = false;
 	}
+
+	async function snapshot(
+		chapterId: string,
+		content: JSONContent,
+		label: string | null = null,
+		pinned: boolean = false,
+	) {
+		const json = JSON.stringify(content);
+		if (!pinned && lastSnapshotJson.get(chapterId) === json) return;
+		try {
+			await versionStore.createVersion(chapterId, content, countWords(content), label, pinned);
+			lastSnapshotJson.set(chapterId, json);
+		} catch (e) {
+			console.error("Snapshot failed:", e);
+		}
+	}
+
+	async function maybeSnapshot(chapterId: string, current: JSONContent) {
+		const now = Date.now();
+		const baseline = sessionBaseline.get(chapterId);
+
+		if (baseline) {
+			sessionBaseline.delete(chapterId);
+			if (countWords(baseline) > 0) {
+				await snapshot(chapterId, baseline);
+				lastSnapshotAt.set(chapterId, now);
+				return;
+			}
+		}
+
+		if (now - (lastSnapshotAt.get(chapterId) ?? 0) < SNAPSHOT_INTERVAL) return;
+		await snapshot(chapterId, current);
+		lastSnapshotAt.set(chapterId, now);
+	}
+
+	async function openHistory() {
+		if (!activeChapterId.value) return;
+		await saveActiveChapter();
+		await versionStore.fetchVersions(activeChapterId.value);
+		showHistory.value = true;
+	}
+
+	async function saveManualVersion() {
+		if (!activeChapterId.value || !editor.value) return;
+		await snapshot(activeChapterId.value, editor.value.getJSON(), "Saved by you", true);
+		await versionStore.fetchVersions(activeChapterId.value);
+	}
+
+	async function restoreVersion(version: ChapterVersion) {
+		if (!activeChapterId.value || !editor.value) return;
+		pendingRestore.value = null;
+		await snapshot(activeChapterId.value, editor.value.getJSON(), "Before restore");
+		isLoadingChapter = true;
+		editor.value.commands.setContent(version.content ?? "");
+		isLoadingChapter = false;
+		await saveActiveChapter();
+		showHistory.value = false;
+	}
+
+	async function removeVersion(version: ChapterVersion) {
+		pendingDeleteVersion.value = null;
+		try {
+			await versionStore.deleteVersion(version.id);
+		} catch (e) {
+			console.error("Delete version failed:", e);
+		}
+	}
+
+	function formatVersionDate(iso: string) {
+		return new Date(iso).toLocaleString(undefined, {
+			month: "short",
+			day: "numeric",
+			hour: "2-digit",
+			minute: "2-digit",
+		});
+	}
 </script>
 
 <template>
@@ -232,142 +349,142 @@
 		<!-- Full-width toolbar -->
 		<div class="panel flex items-center gap-1 rounded-2xl px-3 py-2">
 			<button
-				type="button"
-				@click="editor?.chain().focus().undo().run()"
 				:disabled="!editor?.can().undo()"
-				class="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-canvas hover:text-ink disabled:cursor-not-allowed disabled:opacity-30">
+				class="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-canvas hover:text-ink disabled:cursor-not-allowed disabled:opacity-30"
+				type="button"
+				@click="editor?.chain().focus().undo().run()">
 				<Undo2 class="h-4 w-4" />
 			</button>
 			<button
-				type="button"
-				@click="editor?.chain().focus().redo().run()"
 				:disabled="!editor?.can().redo()"
-				class="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-canvas hover:text-ink disabled:cursor-not-allowed disabled:opacity-30">
+				class="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-canvas hover:text-ink disabled:cursor-not-allowed disabled:opacity-30"
+				type="button"
+				@click="editor?.chain().focus().redo().run()">
 				<Redo2 class="h-4 w-4" />
 			</button>
 
 			<div class="mx-2 h-5 w-px bg-line"></div>
 			<button
-				type="button"
-				@click="editor?.chain().focus().toggleBold().run()"
+				:class="{ 'bg-canvas text-ink': editor?.isActive('bold') }"
 				class="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-canvas hover:text-ink"
-				:class="{ 'bg-canvas text-ink': editor?.isActive('bold') }">
+				type="button"
+				@click="editor?.chain().focus().toggleBold().run()">
 				<Bold class="h-4 w-4" />
 			</button>
 			<button
-				type="button"
-				@click="editor?.chain().focus().toggleItalic().run()"
+				:class="{ 'bg-canvas text-ink': editor?.isActive('italic') }"
 				class="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-canvas hover:text-ink"
-				:class="{ 'bg-canvas text-ink': editor?.isActive('italic') }">
+				type="button"
+				@click="editor?.chain().focus().toggleItalic().run()">
 				<Italic class="h-4 w-4" />
 			</button>
 			<button
-				type="button"
-				@click="editor?.chain().focus().toggleUnderline().run()"
+				:class="{ 'bg-canvas text-ink': editor?.isActive('underline') }"
 				class="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-canvas hover:text-ink"
-				:class="{ 'bg-canvas text-ink': editor?.isActive('underline') }">
+				type="button"
+				@click="editor?.chain().focus().toggleUnderline().run()">
 				<Underline class="h-4 w-4" />
 			</button>
 			<button
-				type="button"
-				@click="editor?.chain().focus().toggleStrike().run()"
+				:class="{ 'bg-canvas text-ink': editor?.isActive('strike') }"
 				class="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-canvas hover:text-ink"
-				:class="{ 'bg-canvas text-ink': editor?.isActive('strike') }">
+				type="button"
+				@click="editor?.chain().focus().toggleStrike().run()">
 				<Strikethrough class="h-4 w-4" />
 			</button>
 
 			<div class="mx-2 h-5 w-px bg-line"></div>
 
 			<button
-				type="button"
-				@click="editor?.chain().focus().toggleHeading({ level: 1 }).run()"
+				:class="{ 'bg-canvas text-ink': editor?.isActive('heading', { level: 1 }) }"
 				class="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-canvas hover:text-ink"
-				:class="{ 'bg-canvas text-ink': editor?.isActive('heading', { level: 1 }) }">
+				type="button"
+				@click="editor?.chain().focus().toggleHeading({ level: 1 }).run()">
 				<Heading1 class="h-4 w-4" />
 			</button>
 			<button
-				type="button"
-				@click="editor?.chain().focus().toggleHeading({ level: 2 }).run()"
+				:class="{ 'bg-canvas text-ink': editor?.isActive('heading', { level: 2 }) }"
 				class="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-canvas hover:text-ink"
-				:class="{ 'bg-canvas text-ink': editor?.isActive('heading', { level: 2 }) }">
+				type="button"
+				@click="editor?.chain().focus().toggleHeading({ level: 2 }).run()">
 				<Heading2 class="h-4 w-4" />
 			</button>
 			<button
-				type="button"
-				@click="editor?.chain().focus().toggleHeading({ level: 3 }).run()"
+				:class="{ 'bg-canvas text-ink': editor?.isActive('heading', { level: 3 }) }"
 				class="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-canvas hover:text-ink"
-				:class="{ 'bg-canvas text-ink': editor?.isActive('heading', { level: 3 }) }">
+				type="button"
+				@click="editor?.chain().focus().toggleHeading({ level: 3 }).run()">
 				<Heading3 class="h-4 w-4" />
 			</button>
 
 			<div class="mx-2 h-5 w-px bg-line"></div>
 
 			<button
-				type="button"
-				@click="editor?.chain().focus().toggleBulletList().run()"
+				:class="{ 'bg-canvas text-ink': editor?.isActive('bulletList') }"
 				class="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-canvas hover:text-ink"
-				:class="{ 'bg-canvas text-ink': editor?.isActive('bulletList') }">
+				type="button"
+				@click="editor?.chain().focus().toggleBulletList().run()">
 				<List class="h-4 w-4" />
 			</button>
 			<button
-				type="button"
-				@click="editor?.chain().focus().toggleOrderedList().run()"
+				:class="{ 'bg-canvas text-ink': editor?.isActive('orderedList') }"
 				class="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-canvas hover:text-ink"
-				:class="{ 'bg-canvas text-ink': editor?.isActive('orderedList') }">
+				type="button"
+				@click="editor?.chain().focus().toggleOrderedList().run()">
 				<ListOrdered class="h-4 w-4" />
 			</button>
 
 			<div class="mx-2 h-5 w-px bg-line"></div>
 
 			<button
-				type="button"
-				@click="editor?.chain().focus().setTextAlign('left').run()"
+				:class="{ 'bg-canvas text-ink': editor?.isActive({ textAlign: 'left' }) }"
 				class="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-canvas hover:text-ink"
-				:class="{ 'bg-canvas text-ink': editor?.isActive({ textAlign: 'left' }) }">
+				type="button"
+				@click="editor?.chain().focus().setTextAlign('left').run()">
 				<AlignLeft class="h-4 w-4" />
 			</button>
 			<button
-				type="button"
-				@click="editor?.chain().focus().setTextAlign('center').run()"
+				:class="{ 'bg-canvas text-ink': editor?.isActive({ textAlign: 'center' }) }"
 				class="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-canvas hover:text-ink"
-				:class="{ 'bg-canvas text-ink': editor?.isActive({ textAlign: 'center' }) }">
+				type="button"
+				@click="editor?.chain().focus().setTextAlign('center').run()">
 				<AlignCenter class="h-4 w-4" />
 			</button>
 			<button
-				type="button"
-				@click="editor?.chain().focus().setTextAlign('right').run()"
+				:class="{ 'bg-canvas text-ink': editor?.isActive({ textAlign: 'right' }) }"
 				class="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-canvas hover:text-ink"
-				:class="{ 'bg-canvas text-ink': editor?.isActive({ textAlign: 'right' }) }">
+				type="button"
+				@click="editor?.chain().focus().setTextAlign('right').run()">
 				<AlignRight class="h-4 w-4" />
 			</button>
 			<button
-				type="button"
-				@click="editor?.chain().focus().setTextAlign('justify').run()"
+				:class="{ 'bg-canvas text-ink': editor?.isActive({ textAlign: 'justify' }) }"
 				class="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-canvas hover:text-ink"
-				:class="{ 'bg-canvas text-ink': editor?.isActive({ textAlign: 'justify' }) }">
+				type="button"
+				@click="editor?.chain().focus().setTextAlign('justify').run()">
 				<AlignJustify class="h-4 w-4" />
 			</button>
 
 			<button
-				type="button"
-				@click="editor?.chain().focus().toggleBlockquote().run()"
+				:class="{ 'bg-canvas text-ink': editor?.isActive('blockquote') }"
 				class="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-canvas hover:text-ink"
-				:class="{ 'bg-canvas text-ink': editor?.isActive('blockquote') }">
+				type="button"
+				@click="editor?.chain().focus().toggleBlockquote().run()">
 				<Quote class="h-4 w-4" />
 			</button>
 
 			<button
-				type="button"
 				aria-label="Scene break"
-				@click="editor?.chain().focus().setHorizontalRule().run()"
-				class="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-canvas hover:text-ink">
+				class="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-canvas hover:text-ink"
+				type="button"
+				@click="editor?.chain().focus().setHorizontalRule().run()">
 				<Minus class="h-4 w-4" />
 			</button>
 			<button
-				type="button"
 				aria-label="Page break"
-				@click="editor?.chain().focus().setPageBreak().run()"
-				class="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-canvas hover:text-ink">
+				class="cursor-pointer rounded-lg p-2 text-muted transition hover:bg-canvas hover:text-ink"
+				type="button"
+				@click="editor?.chain().focus().setPageBreak().run()">
 				<SeparatorHorizontal class="h-4 w-4" />
 			</button>
 
@@ -380,52 +497,59 @@
 			<!-- Icon rail -->
 			<nav class="panel flex w-16 shrink-0 flex-col items-center gap-4 rounded-2xl py-4">
 				<button
-					type="button"
 					aria-label="Toggle chapters"
-					@click="editorUi.toggleChapters"
-					class="cursor-pointer rounded-full p-2.5 text-muted transition hover:bg-canvas hover:text-ink">
+					class="cursor-pointer rounded-full p-2.5 text-muted transition hover:bg-canvas hover:text-ink"
+					type="button"
+					@click="editorUi.toggleChapters">
 					<PanelLeft class="h-5 w-5" />
 				</button>
-				<button type="button" aria-label="Manuscript" class="rounded-full bg-canvas p-2.5 text-ink">
+				<button aria-label="Manuscript" class="rounded-full bg-canvas p-2.5 text-ink" type="button">
 					<BookText class="h-5 w-5" />
 				</button>
 				<button
-					type="button"
 					aria-label="Planner"
-					class="cursor-pointer rounded-full p-2.5 text-muted transition hover:bg-canvas hover:text-ink">
+					class="cursor-pointer rounded-full p-2.5 text-muted transition hover:bg-canvas hover:text-ink"
+					type="button">
 					<LayoutGrid class="h-5 w-5" />
 				</button>
 				<button
-					type="button"
 					aria-label="Export"
-					@click="openExport"
-					class="cursor-pointer rounded-full p-2.5 text-muted transition hover:bg-canvas hover:text-ink">
+					class="cursor-pointer rounded-full p-2.5 text-muted transition hover:bg-canvas hover:text-ink"
+					type="button"
+					@click="openExport">
 					<FileDown class="h-5 w-5" />
 				</button>
 				<button
+					aria-label="Version history"
+					class="cursor-pointer rounded-full p-2.5 text-muted transition hover:bg-canvas hover:text-ink"
 					type="button"
+					@click="openHistory">
+					<History class="h-5 w-5" />
+				</button>
+				<button
 					aria-label="Settings"
-					class="mt-auto cursor-pointer rounded-full p-2.5 text-muted transition hover:bg-canvas hover:text-ink">
+					class="mt-auto cursor-pointer rounded-full p-2.5 text-muted transition hover:bg-canvas hover:text-ink"
+					type="button">
 					<Settings class="h-5 w-5" />
 				</button>
 			</nav>
 
 			<!-- Chapters sidebar (collapsible) -->
 			<div
-				class="shrink-0 overflow-hidden rounded-2xl transition-all duration-300 ease-out"
-				:class="chaptersCollapsed ? 'w-0 opacity-0' : 'w-72 opacity-100'">
+				:class="chaptersCollapsed ? 'w-0 opacity-0' : 'w-72 opacity-100'"
+				class="shrink-0 overflow-hidden rounded-2xl transition-all duration-300 ease-out">
 				<aside class="panel flex h-full w-72 flex-col rounded-2xl">
 					<div class="flex gap-2 p-4">
 						<button
+							class="flex cursor-pointer items-center gap-1.5 rounded-full bg-violet px-4 py-2 text-sm font-medium text-white transition hover:brightness-110"
 							type="button"
-							@click="handleAddChapter"
-							class="flex cursor-pointer items-center gap-1.5 rounded-full bg-violet px-4 py-2 text-sm font-medium text-white transition hover:brightness-110">
+							@click="handleAddChapter">
 							<Plus class="h-4 w-4" />
 							Add new
 						</button>
 						<button
-							type="button"
-							class="flex cursor-pointer items-center gap-1.5 rounded-full border border-line px-4 py-2 text-sm text-ink transition hover:bg-canvas">
+							class="flex cursor-pointer items-center gap-1.5 rounded-full border border-line px-4 py-2 text-sm text-ink transition hover:bg-canvas"
+							type="button">
 							<Download class="h-4 w-4" />
 							Import
 						</button>
@@ -438,45 +562,45 @@
 							<div
 								v-for="chapter in chapters"
 								:key="chapter.id"
-								class="group flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition"
 								:class="
 									editingChapterId === chapter.id
 										? ''
 										: chapter.id === activeChapterId
 											? 'bg-canvas font-medium text-ink'
 											: 'text-muted hover:bg-canvas/60 hover:text-ink'
-								">
+								"
+								class="group flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition">
 								<div v-if="editingChapterId === chapter.id" class="relative w-full">
 									<FileText class="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted" />
 									<input
-										v-focus
 										v-model="editingTitle"
-										@keydown.enter.prevent="saveRename"
-										@keydown.esc="cancelRename"
+										v-focus
+										class="w-full rounded-2xl border border-line bg-canvas py-3 pl-12 pr-4 text-sm text-ink outline-none transition focus:border-violet"
 										@blur="cancelRename"
-										class="w-full rounded-2xl border border-line bg-canvas py-3 pl-12 pr-4 text-sm text-ink outline-none transition focus:border-violet" />
+										@keydown.enter.prevent="saveRename"
+										@keydown.esc="cancelRename" />
 								</div>
 
 								<template v-else>
 									<FileText class="h-4 w-4 shrink-0" />
 									<button
+										class="min-w-0 flex-1 cursor-pointer truncate text-left"
 										type="button"
-										@click="selectChapter(chapter.id)"
-										class="min-w-0 flex-1 cursor-pointer truncate text-left">
+										@click="selectChapter(chapter.id)">
 										{{ chapter.title }}
 									</button>
 									<button
-										type="button"
 										aria-label="Rename chapter"
-										@click.stop="startRename(chapter)"
-										class="shrink-0 cursor-pointer rounded p-1 text-muted opacity-0 transition hover:bg-canvas hover:text-ink group-hover:opacity-100">
+										class="shrink-0 cursor-pointer rounded p-1 text-muted opacity-0 transition hover:bg-canvas hover:text-ink group-hover:opacity-100"
+										type="button"
+										@click.stop="startRename(chapter)">
 										<Pencil class="h-3.5 w-3.5" />
 									</button>
 									<button
-										type="button"
 										aria-label="Delete chapter"
-										@click.stop="deletingChapter = chapter"
-										class="shrink-0 cursor-pointer rounded p-1 text-muted opacity-0 transition hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100">
+										class="shrink-0 cursor-pointer rounded p-1 text-muted opacity-0 transition hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
+										type="button"
+										@click.stop="deletingChapter = chapter">
 										<Trash2 class="h-3.5 w-3.5" />
 									</button>
 								</template>
@@ -521,6 +645,8 @@
 				</div>
 			</aside>
 		</div>
+
+		<!--	Delete chapter modal	-->
 		<div
 			v-if="deletingChapter"
 			class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
@@ -530,20 +656,22 @@
 				<p class="mt-2 text-sm text-muted">Delete “{{ deletingChapter.title }}”? This can’t be undone.</p>
 				<div class="mt-6 flex justify-end gap-2">
 					<button
-						type="button"
 						class="cursor-pointer rounded-full px-5 py-2 text-sm text-muted transition hover:bg-canvas hover:text-ink"
+						type="button"
 						@click="deletingChapter = null">
 						Cancel
 					</button>
 					<button
-						type="button"
 						class="cursor-pointer rounded-full bg-red-500 px-5 py-2 text-sm font-medium text-white transition hover:bg-red-600"
+						type="button"
 						@click="confirmDeleteChapter">
 						Delete
 					</button>
 				</div>
 			</div>
 		</div>
+
+		<!--	Export modal	-->
 		<div
 			v-if="showExport"
 			class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
@@ -557,15 +685,15 @@
 					<button
 						v-for="f in formats"
 						:key="f.value"
-						type="button"
-						:disabled="f.soon"
-						@click="format = f.value"
-						class="flex-1 cursor-pointer rounded-xl border px-4 py-2.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-40"
 						:class="
 							format === f.value
 								? 'border-violet bg-violet/10 text-violet'
 								: 'border-line text-muted hover:bg-canvas hover:text-ink'
-						">
+						"
+						:disabled="f.soon"
+						class="flex-1 cursor-pointer rounded-xl border px-4 py-2.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-40"
+						type="button"
+						@click="format = f.value">
 						{{ f.label }}
 						<span v-if="f.soon" class="ml-1 text-xs">soon</span>
 					</button>
@@ -578,28 +706,134 @@
 						:key="chapter.id"
 						class="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-ink transition hover:bg-canvas">
 						<input
-							type="checkbox"
 							:checked="selectedIds.has(chapter.id)"
-							@change="toggleExportChapter(chapter.id)"
-							class="h-4 w-4 accent-violet" />
+							class="h-4 w-4 accent-violet"
+							type="checkbox"
+							@change="toggleExportChapter(chapter.id)" />
 						<span class="truncate">{{ chapter.title }}</span>
 					</label>
 				</div>
 
 				<div class="mt-6 flex justify-end gap-2">
 					<button
-						type="button"
 						class="cursor-pointer rounded-full px-5 py-2 text-sm text-muted transition hover:bg-canvas hover:text-ink"
+						type="button"
 						@click="showExport = false">
 						Cancel
 					</button>
 					<button
-						type="button"
 						:disabled="selectedIds.size === 0"
 						class="cursor-pointer rounded-full bg-violet px-5 py-2 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+						type="button"
 						@click="runExport">
 						Export
 					</button>
+				</div>
+			</div>
+		</div>
+
+		<!--	History modal	-->
+		<div
+			v-if="showHistory"
+			class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+			@click.self="showHistory = false">
+			<div class="flex max-h-[70vh] w-full max-w-md flex-col rounded-2xl border border-line bg-surface p-6 shadow-xl">
+				<h2 class="text-lg font-semibold text-ink">Version history</h2>
+				<p class="mt-1 text-sm text-muted">Earlier versions of this chapter.</p>
+
+				<button
+					class="mt-4 cursor-pointer self-start rounded-full border border-line px-4 py-2 text-sm text-ink transition hover:bg-canvas"
+					type="button"
+					@click="saveManualVersion">
+					Save a version now
+				</button>
+
+				<div class="mt-4 flex-1 space-y-1 overflow-y-auto">
+					<p v-if="!versions.length" class="px-2 py-1 text-sm text-muted">No versions yet.</p>
+
+					<div
+						v-for="version in versions"
+						:key="version.id"
+						class="flex items-center justify-between gap-3 rounded-lg px-2 py-2 text-sm transition hover:bg-canvas">
+						<div class="min-w-0">
+							<p class="truncate text-ink">{{ version.label ?? formatVersionDate(version.created_at) }}</p>
+							<p class="text-xs text-muted">
+								{{ version.label ? formatVersionDate(version.created_at) + " · " : "" }}{{ version.word_count }} words
+							</p>
+						</div>
+
+						<div class="flex shrink-0 items-center gap-1">
+							<button
+								class="cursor-pointer rounded-full px-3 py-1.5 text-xs text-violet transition hover:bg-violet/10"
+								type="button"
+								@click="pendingRestore = version">
+								Restore
+							</button>
+							<button
+								aria-label="Delete version"
+								class="cursor-pointer rounded p-1.5 text-muted transition hover:bg-red-500/10 hover:text-red-400"
+								type="button"
+								@click="pendingDeleteVersion = version">
+								<Trash2 class="h-3.5 w-3.5" />
+							</button>
+						</div>
+					</div>
+				</div>
+
+				<div class="mt-5 flex justify-end">
+					<button
+						class="cursor-pointer rounded-full px-5 py-2 text-sm text-muted transition hover:bg-canvas hover:text-ink"
+						type="button"
+						@click="showHistory = false">
+						Close
+					</button>
+				</div>
+			</div>
+
+			<div
+				v-if="pendingRestore"
+				class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
+				@click.self="pendingRestore = null">
+				<div class="w-full max-w-sm rounded-2xl border border-line bg-surface p-6 shadow-xl">
+					<h2 class="text-lg font-semibold text-ink">Restore this version?</h2>
+					<p class="mt-2 text-sm text-muted">
+						Your current text is saved as a new version first, so you can undo this.
+					</p>
+					<div class="mt-6 flex justify-end gap-2">
+						<button
+							class="cursor-pointer rounded-full px-5 py-2 text-sm text-muted transition hover:bg-canvas hover:text-ink"
+							type="button"
+							@click="pendingRestore = null">
+							Cancel
+						</button>
+						<button
+							class="cursor-pointer rounded-full bg-violet px-5 py-2 text-sm font-medium text-white transition hover:brightness-110"
+							type="button"
+							@click="restoreVersion(pendingRestore)">
+							Restore
+						</button>
+					</div>
+				</div>
+			</div>
+
+			<div v-if="pendingDeleteVersion" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+				<div class="w-full max-w-sm rounded-2xl border border-line bg-surface p-6 shadow-xl">
+					<h2 class="text-lg font-semibold text-ink">Delete this version?</h2>
+					<p class="mt-2 text-sm text-muted">This can’t be undone.</p>
+					<div class="mt-6 flex justify-end gap-2">
+						<button
+							class="cursor-pointer rounded-full px-5 py-2 text-sm text-muted transition hover:bg-canvas hover:text-ink"
+							type="button"
+							@click="pendingDeleteVersion = null">
+							Cancel
+						</button>
+						<button
+							class="cursor-pointer rounded-full bg-red-500 px-5 py-2 text-sm font-medium text-white transition hover:bg-red-600"
+							type="button"
+							@click="removeVersion(pendingDeleteVersion)">
+							Delete
+						</button>
+					</div>
 				</div>
 			</div>
 		</div>

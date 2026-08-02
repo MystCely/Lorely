@@ -1,16 +1,18 @@
 <script lang="ts" setup>
-	import { ref, onMounted, onUnmounted, computed } from "vue";
+	import { ref, onMounted, onUnmounted, watch, computed } from "vue";
 	import { useRoute, useRouter } from "vue-router";
 	import { Feather, Sun, Moon, Settings, LogOut } from "lucide-vue-next";
 	import { useBooksStore } from "../stores/books";
 	import { useAuthStore } from "../stores/auth";
 
-	const isDark = ref(true);
-	const menuOpen = ref(false);
-	const route = useRoute();
 	const router = useRouter();
+	const route = useRoute();
+
 	const booksStore = useBooksStore();
 	const auth = useAuthStore();
+
+	const isDark = ref(true);
+	const menuOpen = ref(false);
 
 	const editingBookTitle = ref(false);
 	const bookTitleDraft = ref("");
@@ -18,8 +20,16 @@
 	const vFocus = { mounted: (el: HTMLElement) => el.focus() };
 
 	const currentBook = computed(() => (route.params.id ? booksStore.getBook(String(route.params.id)) : undefined));
+
 	const showAccountControls = computed(
 		() => !!auth.session && route.name !== "login" && route.name !== "reset-password",
+	);
+
+	watch(
+		() => route.fullPath,
+		() => {
+			menuOpen.value = false;
+		},
 	);
 
 	function startBookRename() {
@@ -69,7 +79,7 @@
 	<header
 		class="sticky top-0 z-40 flex h-(--nav-h) items-center justify-between border-b border-line bg-surface/30 px-8 backdrop-blur-xl">
 		<div class="flex items-center gap-3">
-			<RouterLink to="/" class="flex items-center gap-2 text-2xl font-bold tracking-tight text-ink">
+			<RouterLink class="flex items-center gap-2 text-2xl font-bold tracking-tight text-ink" to="/">
 				Lorely
 				<Feather class="h-6 w-6 text-violet" />
 			</RouterLink>
@@ -131,7 +141,7 @@
 				</div>
 			</div>
 		</div>
-
-		<div v-if="menuOpen" class="fixed inset-0 z-10" @click="menuOpen = false"></div>
 	</header>
+
+	<div v-if="menuOpen" class="fixed inset-0 z-30" @click="menuOpen = false"></div>
 </template>
