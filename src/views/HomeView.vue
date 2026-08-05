@@ -1,13 +1,29 @@
 <script lang="ts" setup>
 	import { ref, onMounted, onUnmounted } from "vue";
 	import { storeToRefs } from "pinia";
-	import { Upload, FolderPlus, ArrowDownUp, Plus, Pencil, Trash2, MoreHorizontal } from "lucide-vue-next";
+	import {
+		Upload,
+		FolderPlus,
+		ArrowDownUp,
+		Plus,
+		Pencil,
+		Trash2,
+		MoreHorizontal,
+		Archive,
+		RotateCcw,
+		ChevronRight,
+	} from "lucide-vue-next";
 	import { useBooksStore, type Book } from "../stores/books";
 	import NewBookModal from "../components/NewBookModal.vue";
+	import { daysLeft } from "../lib/trash.ts";
 
 	const booksStore = useBooksStore();
-	const { books } = storeToRefs(booksStore);
-	const { addBook, updateBook, deleteBook, fetchBooks } = booksStore;
+	const { activeBooks, archivedBooks, trashedBooks } = storeToRefs(booksStore);
+	const { addBook, updateBook, trashBook, archiveBook, restoreBook, deleteBookForever, fetchBooks } = booksStore;
+
+	const showArchived = ref(false);
+	const showTrash = ref(false);
+	const purgingBook = ref<Book | null>(null);
 
 	const openMenuId = ref<string | null>(null);
 	const deletingBook = ref<Book | null>(null);
@@ -45,8 +61,14 @@
 
 	async function confirmDelete() {
 		if (!deletingBook.value) return;
-		await deleteBook(deletingBook.value.id);
+		await trashBook(deletingBook.value.id);
 		deletingBook.value = null;
+	}
+
+	async function confirmPurge() {
+		if (!purgingBook.value) return;
+		await deleteBookForever(purgingBook.value.id);
+		purgingBook.value = null;
 	}
 
 	async function handleSubmit(payload: { title: string; author: string; coverFile: File | null }) {
@@ -72,7 +94,7 @@
 		<div class="mb-6 flex items-center justify-between">
 			<div>
 				<h2 class="text-xl font-semibold text-ink">Your manuscripts</h2>
-				<p class="mt-1 text-sm text-muted">{{ books.length }} books</p>
+				<p class="mt-1 text-sm text-muted">{{ activeBooks.length }} books</p>
 			</div>
 			<div class="flex items-center gap-1">
 				<button
@@ -90,7 +112,7 @@
 		</div>
 
 		<div class="flex flex-wrap gap-6">
-			<div v-for="book in books" :key="book.id" class="w-36">
+			<div v-for="book in activeBooks" :key="book.id" class="w-36">
 				<RouterLink :to="`/book/${book.id}/editor`" class="group block">
 					<div
 						class="relative flex aspect-2/3 overflow-hidden rounded-md bg-linear-to-br from-grad-start to-grad-end shadow-md transition group-hover:-translate-y-1 group-hover:shadow-xl"
@@ -142,6 +164,16 @@
 								type="button"
 								class="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-sm text-ink transition hover:bg-canvas"
 								@click="
+									archiveBook(book.id);
+									openMenuId = null;
+								">
+								<Archive class="h-4 w-4" />
+								Archive
+							</button>
+							<button
+								type="button"
+								class="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-sm text-ink transition hover:bg-canvas"
+								@click="
 									deletingBook = book;
 									openMenuId = null;
 								">
@@ -161,6 +193,74 @@
 			</button>
 		</div>
 
+		<div v-if="archivedBooks.length" class="mt-12">
+			<button
+				type="button"
+				class="flex cursor-pointer items-center gap-2 text-sm font-medium text-muted transition hover:text-ink"
+				@click="showArchived = !showArchived">
+				<ChevronRight class="h-4 w-4 transition" :class="{ 'rotate-90': showArchived }" />
+				Archived ({{ archivedBooks.length }})
+			</button>
+
+			<div v-if="showArchived" class="mt-3 space-y-1">
+				<div
+					v-for="book in archivedBooks"
+					:key="book.id"
+					class="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 transition hover:bg-surface">
+					<div class="min-w-0">
+						<p class="truncate text-sm text-ink">{{ book.title }}</p>
+						<p class="text-xs text-muted">{{ book.author || "Unknown author" }}</p>
+					</div>
+					<button
+						type="button"
+						class="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full px-3 py-1.5 text-xs text-violet transition hover:bg-violet/10"
+						@click="restoreBook(book.id)">
+						<RotateCcw class="h-3.5 w-3.5" />
+						Restore
+					</button>
+				</div>
+			</div>
+		</div>
+
+		<div v-if="trashedBooks.length" class="mt-8">
+			<button
+				type="button"
+				class="flex cursor-pointer items-center gap-2 text-sm font-medium text-muted transition hover:text-ink"
+				@click="showTrash = !showTrash">
+				<ChevronRight class="h-4 w-4 transition" :class="{ 'rotate-90': showTrash }" />
+				Trash ({{ trashedBooks.length }})
+			</button>
+
+			<div v-if="showTrash" class="mt-3 space-y-1">
+				<p class="px-3 pb-1 text-xs text-muted">Items in the trash are deleted permanently after 30 days.</p>
+				<div
+					v-for="book in trashedBooks"
+					:key="book.id"
+					class="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 transition hover:bg-surface">
+					<div class="min-w-0">
+						<p class="truncate text-sm text-ink">{{ book.title }}</p>
+						<p class="text-xs text-muted">{{ daysLeft(book.deleted_at) }} days left</p>
+					</div>
+					<div class="flex shrink-0 items-center gap-1">
+						<button
+							type="button"
+							class="flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1.5 text-xs text-violet transition hover:bg-violet/10"
+							@click="restoreBook(book.id)">
+							<RotateCcw class="h-3.5 w-3.5" />
+							Restore
+						</button>
+						<button
+							type="button"
+							aria-label="Delete permanently"
+							class="cursor-pointer rounded p-1.5 text-muted transition hover:bg-red-500/10 hover:text-red-400"
+							@click="purgingBook = book">
+							<Trash2 class="h-3.5 w-3.5" />
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+
 		<div v-if="openMenuId" class="fixed inset-0 z-10" @click="openMenuId = null"></div>
 		<NewBookModal
 			v-if="showModal"
@@ -175,8 +275,10 @@
 			class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
 			@click.self="deletingBook = null">
 			<div class="w-full max-w-sm rounded-lg border border-line bg-surface p-6 shadow-xl">
-				<h2 class="text-lg font-semibold text-ink">Delete book?</h2>
-				<p class="mt-2 text-sm text-muted">Delete “{{ deletingBook.title }}”? This can’t be undone.</p>
+				<h2 class="text-lg font-semibold text-ink">Move to trash?</h2>
+				<p class="mt-2 text-sm text-muted">
+					“{{ deletingBook.title }}” stays in the trash for 30 days, then it’s gone.
+				</p>
 				<div class="mt-6 flex justify-end gap-2">
 					<button
 						type="button"
@@ -188,6 +290,27 @@
 						type="button"
 						class="cursor-pointer rounded-full bg-red-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-600"
 						@click="confirmDelete">
+						Delete
+					</button>
+				</div>
+			</div>
+		</div>
+
+		<div v-if="purgingBook" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+			<div class="w-full max-w-sm rounded-2xl border border-line bg-surface p-6 shadow-xl">
+				<h2 class="text-lg font-semibold text-ink">Delete permanently?</h2>
+				<p class="mt-2 text-sm text-muted">“{{ purgingBook.title }}” and all its chapters will be gone for good.</p>
+				<div class="mt-6 flex justify-end gap-2">
+					<button
+						type="button"
+						class="cursor-pointer rounded-full px-5 py-2 text-sm text-muted transition hover:bg-canvas hover:text-ink"
+						@click="purgingBook = null">
+						Cancel
+					</button>
+					<button
+						type="button"
+						class="cursor-pointer rounded-full bg-red-500 px-5 py-2 text-sm font-medium text-white transition hover:bg-red-600"
+						@click="confirmPurge">
 						Delete
 					</button>
 				</div>

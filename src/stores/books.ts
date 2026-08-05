@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { supabase } from "../lib/supabaseClient";
 
 export interface Book {
@@ -10,10 +10,18 @@ export interface Book {
 	cover_image: string | null;
 	default_color: string | null;
 	created_at: string;
+	archived_at: string | null;
+	deleted_at: string | null;
 }
 
 export const useBooksStore = defineStore("books", () => {
 	const books = ref<Book[]>([]);
+
+	const activeBooks = computed(() => books.value.filter((b) => !b.archived_at && !b.deleted_at));
+	const archivedBooks = computed(() => books.value.filter((b) => b.archived_at && !b.deleted_at));
+	const trashedBooks = computed(() => books.value.filter((b) => b.deleted_at));
+
+	const now = () => new Date().toISOString();
 
 	async function fetchBooks() {
 		const { data, error } = await supabase.from("books").select("*").order("created_at", { ascending: false });
@@ -78,7 +86,26 @@ export const useBooksStore = defineStore("books", () => {
 		if (index !== -1) books.value[index] = data;
 	}
 
-	async function deleteBook(id: string) {
+	async function setBookState(id: string, patch: { archived_at?: string | null; deleted_at: string | null }) {
+		const { data, error } = await supabase.from("books").update(patch).eq("id", id).select().single();
+		if (error) throw error;
+		const index = books.value.findIndex((book) => book.id === id);
+		if (index !== 1) books.value[index] = data;
+	}
+
+	async function archiveBook(id: string) {
+		await setBookState(id, { archived_at: now(), deleted_at: null });
+	}
+
+	async function trashBook(id: string) {
+		await setBookState(id, { deleted_at: now() });
+	}
+
+	async function restoreBook(id: string) {
+		await setBookState(id, { archived_at: null, deleted_at: null });
+	}
+
+	async function deleteBookForever(id: string) {
 		const { error } = await supabase.from("books").delete().eq("id", id);
 		if (error) throw error;
 		books.value = books.value.filter((book) => book.id !== id);
@@ -88,5 +115,20 @@ export const useBooksStore = defineStore("books", () => {
 		return books.value.find((book) => book.id === id);
 	}
 
-	return { books, fetchBooks, fetchBook, renameBook, addBook, updateBook, deleteBook, getBook };
+	return {
+		books,
+		activeBooks,
+		archivedBooks,
+		trashedBooks,
+		fetchBooks,
+		fetchBook,
+		renameBook,
+		addBook,
+		updateBook,
+		archiveBook,
+		trashBook,
+		restoreBook,
+		deleteBookForever,
+		getBook,
+	};
 });

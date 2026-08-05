@@ -8,9 +8,6 @@
 	import TextAlign from "@tiptap/extension-text-align";
 	import type { JSONContent } from "@tiptap/vue-3";
 
-	import { PageBreak } from "../lib/pageBreak";
-	import { countWords } from "../lib/wordCount.ts";
-
 	import {
 		Plus,
 		Download,
@@ -44,6 +41,9 @@
 		AlignJustify,
 		SeparatorHorizontal,
 		History,
+		Archive,
+		RotateCcw,
+		ChevronRight,
 	} from "lucide-vue-next";
 
 	import { useChaptersStore, type Chapter } from "../stores/chapters";
@@ -55,6 +55,10 @@
 	import { exportToDocx } from "../lib/exportDocx";
 	import { exportToEpub } from "../lib/exportEpub";
 
+	import { PageBreak } from "../lib/pageBreak";
+	import { countWords } from "../lib/wordCount.ts";
+	import { daysLeft } from "../lib/trash.ts";
+
 	const route = useRoute();
 	const router = useRouter();
 
@@ -64,30 +68,46 @@
 	const versionStore = useVersionsStore();
 
 	const { versions } = storeToRefs(versionStore);
-	const { chapters } = storeToRefs(chaptersStore);
+	const { activeChapters, archivedChapters, trashedChapters } = storeToRefs(chaptersStore);
 	const { chaptersCollapsed } = storeToRefs(editorUi);
 
-	const { fetchChapters, addChapter, getChapter, updateChapter, deleteChapter } = chaptersStore;
-
-	const showHistory = ref(false);
+	const {
+		fetchChapters,
+		addChapter,
+		getChapter,
+		updateChapter,
+		trashChapter,
+		archiveChapter,
+		restoreChapter,
+		deleteChapterForever,
+	} = chaptersStore;
 
 	const SNAPSHOT_INTERVAL = 10 * 60 * 1000;
 	const lastSnapshotAt = new Map<string, number>();
 	const sessionBaseline = new Map<string, JSONContent>();
 	const lastSnapshotJson = new Map<string, string>();
+
 	const pendingRestore = ref<ChapterVersion | null>(null);
 	const pendingDeleteVersion = ref<ChapterVersion | null>(null);
 
+	const showHistory = ref(false);
 	const showExport = ref(false);
-	const selectedIds = ref<Set<string>>(new Set());
 
-	const editingChapterId = ref<string | null>(null);
-	const editingTitle = ref("");
+	const showArchivedChapters = ref(false);
+	const showTrashedChapters = ref(false);
+
+	const purgingChapter = ref<Chapter | null>(null);
 	const deletingChapter = ref<Chapter | null>(null);
 
+	const selectedIds = ref<Set<string>>(new Set());
+	const editingChapterId = ref<string | null>(null);
 	const activeChapterId = ref<string | null>(null);
+
+	const editingTitle = ref("");
+
 	const loading = ref(true);
 	const saveState = ref<"idle" | "saving" | "saved" | "error">("idle");
+
 	let saveTimer: ReturnType<typeof setTimeout> | undefined;
 	let isLoadingChapter = false;
 
@@ -117,7 +137,7 @@
 		loading.value = false;
 
 		const wanted = route.query.chapter as string | undefined;
-		const initial = chapters.value.find((c) => c.id === wanted) ?? chapters.value[0];
+		const initial = activeChapters.value.find((c) => c.id === wanted) ?? activeChapters.value[0];
 		if (initial) selectChapter(initial.id);
 
 		window.addEventListener("keydown", onKeyDown);
@@ -136,6 +156,7 @@
 	function onKeyDown(e: KeyboardEvent) {
 		if (e.key === "Escape") {
 			if (pendingDeleteVersion.value) return;
+			if (purgingChapter.value) return;
 			if (pendingRestore.value) {
 				pendingRestore.value = null;
 				return;
@@ -228,17 +249,23 @@
 			saveTimer = undefined;
 			activeChapterId.value = null;
 		}
-		await deleteChapter(chapter.id);
+		await trashChapter(chapter.id);
 		deletingChapter.value = null;
 		if (wasActive) {
-			const next = chapters.value[0];
+			const next = activeChapters.value[0];
 			if (next) selectChapter(next.id);
 			else editor.value?.commands.setContent("");
 		}
 	}
 
+	async function confirmPurgeChapter() {
+		if (!purgingChapter.value) return;
+		await deleteChapterForever(purgingChapter.value.id);
+		purgingChapter.value = null;
+	}
+
 	function openExport() {
-		selectedIds.value = new Set(chapters.value.map((c) => c.id));
+		selectedIds.value = new Set(activeChapters.value.map((c) => c.id));
 		showExport.value = true;
 	}
 
@@ -253,7 +280,7 @@
 		const book = booksStore.getBook(String(route.params.id));
 		const title = book?.title ?? "Manuscript";
 		const author = book?.author ?? "";
-		const chosen = chapters.value
+		const chosen = activeChapters.value
 			.filter((c) => selectedIds.value.has(c.id))
 			.map((c) => ({ title: c.title, content: c.content }));
 
@@ -556,11 +583,11 @@
 					</div>
 					<div class="flex-1 overflow-y-auto px-3 pb-3">
 						<p v-if="loading" class="px-2 py-1 text-sm text-muted">Loading…</p>
-						<p v-else-if="!chapters.length" class="px-2 py-1 text-sm text-muted">No chapters yet.</p>
+						<p v-else-if="!activeChapters.length" class="px-2 py-1 text-sm text-muted">No chapters yet.</p>
 						<!-- Chapter list -->
 						<nav v-else class="flex flex-col gap-1">
 							<div
-								v-for="chapter in chapters"
+								v-for="chapter in activeChapters"
 								:key="chapter.id"
 								:class="
 									editingChapterId === chapter.id
@@ -597,6 +624,13 @@
 										<Pencil class="h-3.5 w-3.5" />
 									</button>
 									<button
+										type="button"
+										aria-label="Archive chapter"
+										@click.stop="archiveChapter(chapter.id)"
+										class="shrink-0 cursor-pointer rounded p-1 text-muted opacity-0 transition hover:bg-canvas hover:text-ink group-hover:opacity-100">
+										<Archive class="h-3.5 w-3.5" />
+									</button>
+									<button
 										aria-label="Delete chapter"
 										class="shrink-0 cursor-pointer rounded p-1 text-muted opacity-0 transition hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
 										type="button"
@@ -606,6 +640,89 @@
 								</template>
 							</div>
 						</nav>
+
+						<div v-if="archivedChapters.length" class="mt-6">
+							<button
+								type="button"
+								class="flex w-full cursor-pointer items-center gap-1.5 px-2 text-xs font-medium text-muted transition hover:text-ink"
+								@click="showArchivedChapters = !showArchivedChapters">
+								<ChevronRight class="h-3.5 w-3.5 transition" :class="{ 'rotate-90': showArchivedChapters }" />
+								Archived ({{ archivedChapters.length }})
+							</button>
+							<div v-if="showArchivedChapters" class="mt-1 flex flex-col gap-0.5">
+								<div
+									v-for="chapter in archivedChapters"
+									:key="chapter.id"
+									class="group flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-muted transition hover:bg-canvas/60">
+									<span class="min-w-0 flex-1 truncate">{{ chapter.title }}</span>
+									<button
+										type="button"
+										aria-label="Restore chapter"
+										@click="restoreChapter(chapter.id)"
+										class="shrink-0 cursor-pointer rounded p-1 opacity-0 transition hover:text-ink group-hover:opacity-100">
+										<RotateCcw class="h-3.5 w-3.5" />
+									</button>
+								</div>
+							</div>
+						</div>
+
+						<div v-if="trashedChapters.length" class="mt-4">
+							<button
+								type="button"
+								class="flex w-full cursor-pointer items-center gap-1.5 px-2 text-xs font-medium text-muted transition hover:text-ink"
+								@click="showTrashedChapters = !showTrashedChapters">
+								<ChevronRight class="h-3.5 w-3.5 transition" :class="{ 'rotate-90': showTrashedChapters }" />
+								Trash ({{ trashedChapters.length }})
+							</button>
+							<div v-if="showTrashedChapters" class="mt-1 flex flex-col gap-0.5">
+								<div
+									v-for="chapter in trashedChapters"
+									:key="chapter.id"
+									class="group flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-muted transition hover:bg-canvas/60">
+									<div class="min-w-0 flex-1">
+										<p class="truncate">{{ chapter.title }}</p>
+										<p class="text-xs text-muted/70">{{ daysLeft(chapter.deleted_at) }} days left</p>
+									</div>
+									<button
+										type="button"
+										aria-label="Restore chapter"
+										@click="restoreChapter(chapter.id)"
+										class="shrink-0 cursor-pointer rounded p-1 opacity-0 transition hover:text-ink group-hover:opacity-100">
+										<RotateCcw class="h-3.5 w-3.5" />
+									</button>
+									<button
+										type="button"
+										aria-label="Delete permanently"
+										@click="purgingChapter = chapter"
+										class="shrink-0 cursor-pointer rounded p-1 opacity-0 transition hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100">
+										<Trash2 class="h-3.5 w-3.5" />
+									</button>
+								</div>
+							</div>
+						</div>
+
+						<div v-if="purgingChapter" class="fixed inset-0 z-60 flex items-center justify-center bg-black/50 p-4">
+							<div class="w-full max-w-sm rounded-2xl border border-line bg-surface p-6 shadow-xl">
+								<h2 class="text-lg font-semibold text-ink">Delete permanently?</h2>
+								<p class="mt-2 text-sm text-muted">
+									“{{ purgingChapter.title }}” and its version history will be gone for good.
+								</p>
+								<div class="mt-6 flex justify-end gap-2">
+									<button
+										type="button"
+										class="cursor-pointer rounded-full px-5 py-2 text-sm text-muted transition hover:bg-canvas hover:text-ink"
+										@click="purgingChapter = null">
+										Cancel
+									</button>
+									<button
+										type="button"
+										class="cursor-pointer rounded-full bg-red-500 px-5 py-2 text-sm font-medium text-white transition hover:bg-red-600"
+										@click="confirmPurgeChapter">
+										Delete
+									</button>
+								</div>
+							</div>
+						</div>
 					</div>
 				</aside>
 			</div>
@@ -652,8 +769,10 @@
 			class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
 			@click.self="deletingChapter = null">
 			<div class="w-full max-w-sm rounded-2xl border border-line bg-surface p-6 shadow-xl">
-				<h2 class="text-lg font-semibold text-ink">Delete chapter</h2>
-				<p class="mt-2 text-sm text-muted">Delete “{{ deletingChapter.title }}”? This can’t be undone.</p>
+				<h2 class="text-lg font-semibold text-ink">Move to trash?</h2>
+				<p class="mt-2 text-sm text-muted">
+					“{{ deletingChapter.title }}” stays in the trash for 30 days, then it’s gone.
+				</p>
 				<div class="mt-6 flex justify-end gap-2">
 					<button
 						class="cursor-pointer rounded-full px-5 py-2 text-sm text-muted transition hover:bg-canvas hover:text-ink"
@@ -702,7 +821,7 @@
 				<p class="mt-5 mb-2 text-m font-medium text-ink">Chapters</p>
 				<div class="max-h-56 space-y-1 overflow-y-auto">
 					<label
-						v-for="chapter in chapters"
+						v-for="chapter in activeChapters"
 						:key="chapter.id"
 						class="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-ink transition hover:bg-canvas">
 						<input
@@ -792,7 +911,7 @@
 
 			<div
 				v-if="pendingRestore"
-				class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
+				class="fixed inset-0 z-60 flex items-center justify-center bg-black/50 p-4"
 				@click.self="pendingRestore = null">
 				<div class="w-full max-w-sm rounded-2xl border border-line bg-surface p-6 shadow-xl">
 					<h2 class="text-lg font-semibold text-ink">Restore this version?</h2>
@@ -816,7 +935,7 @@
 				</div>
 			</div>
 
-			<div v-if="pendingDeleteVersion" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+			<div v-if="pendingDeleteVersion" class="fixed inset-0 z-60 flex items-center justify-center bg-black/50 p-4">
 				<div class="w-full max-w-sm rounded-2xl border border-line bg-surface p-6 shadow-xl">
 					<h2 class="text-lg font-semibold text-ink">Delete this version?</h2>
 					<p class="mt-2 text-sm text-muted">This can’t be undone.</p>
