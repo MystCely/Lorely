@@ -6,7 +6,7 @@ A clean, distraction-free web app for drafting novels. Organize your manuscripts
 
 **Demo login:** `demo@example.com` / `Demo1234!` (or sign up with any email)
 
-I'm a fiction writer, and I wanted a calmer, less cluttered place to draft my novels than what I'd been using, so I started building one. Lorely is also where I put my full-stack skills into practice: real authentication, a database with per-user security, and cloud file storage, in a TypeScript codebase I care about keeping clean.
+I'm a fiction writer, and I wanted a calmer, less cluttered place to draft my novels than what I'd been using, so I started building one. Lorely is also where I put my full-stack skills into practice: real authentication, a database with per-user security, cloud file storage, and a document pipeline that exports to three formats, in a TypeScript codebase I care about keeping clean.
 
 ## Screenshots
 
@@ -23,25 +23,34 @@ The manuscript library, in dark and light mode.
 - **Styling:** Tailwind CSS v4 (CSS-first config, tokenized design system)
 - **Routing:** Vue Router (nested routes)
 - **State:** Pinia
-- **Backend:** Supabase (Postgres, Auth, Storage, Row-Level Security)
+- **Editor:** Tiptap
+- **Backend:** Supabase (Postgres, Auth, Storage, Row-Level Security, pg_cron)
+- **Export:** pdfmake (PDF), docx (Word), JSZip (ePub)
 - **Icons:** lucide-vue-next
 - **Hosting:** Vercel
-- **Planned:** Tiptap (rich-text editor)
 
 ## Features
 
 - **Email and password authentication** with route guards and sessions that persist across refreshes
 - **Manuscript library.** Create, edit, and delete books, backed by a real Postgres database
 - **Cover image uploads** to Supabase Storage, with a gradient fallback when there's no cover
-- **Per-user data isolation** enforced by Row-Level Security, so you only ever see your own books
+- **Rich-text editor** built on Tiptap, with formatting, headings, lists, alignment, scene breaks, and page breaks
+- **Autosave** with a save indicator, plus manual save on Cmd/Ctrl+S
+- **Chapters.** Create, rename, and delete them, with the chapter you were writing restored on refresh
+- **Version history.** Snapshots as you write, so you can browse earlier drafts and restore one. Restoring is itself undoable
+- **Trash and archive** for books and chapters, with a scheduled job that clears the trash after 30 days
+- **Export to PDF, Word, and ePub**, each with a title page, table of contents, and chapters, generated in the browser
+- **Per-user data isolation** enforced by Row-Level Security, so you only ever see your own work
 - **Light and dark mode** built on a tokenized theme, with one source of truth for every color
-- **Keyboard-friendly modals.** Enter to submit, Escape to close
 
 ## Architecture notes
 
 A few decisions I'm happy with:
 
 - **Row-Level Security as the security model.** The client queries `select * from books` with no owner filter. Postgres RLS policies transparently scope every read and write to the signed-in user, so access control lives in the database rather than in frontend checks that can be bypassed.
+- **Export generates documents, it doesn't print them.** The first version opened a print window, which meant the browser stamped its own URL and date onto every page and named the file after a blob ID. Now each format is built from the editor's JSON: pdfmake for PDF with an embedded serif font, the `docx` library for Word using manuscript conventions, and a hand-assembled EPUB 3 zip. Same source document, three deliberate outputs.
+- **Soft delete instead of destructive delete.** Deleting sets a `deleted_at` timestamp rather than removing the row, so anything can be restored. A `pg_cron` job clears rows older than 30 days. The same pattern covers archiving.
+- **Version history is separate from autosave.** Autosave overwrites one row per chapter, so writing all day costs nothing in storage. Version snapshots are throttled, skipped when nothing changed, and pruned to the most recent fifty, while versions you save yourself are kept.
 - **A tokenized design system.** Colors, the navbar height (`--nav-h`), the font, and transition timing are all CSS variables. Change one line and the whole app updates in both light and dark mode, with no hard-coded colors anywhere.
 - **One modal for create and edit.** The book form takes an optional `book` prop. When it's present, the modal opens in edit mode, pre-filled, with a Save button. When it's absent, it opens in create mode. One component instead of two near-identical ones.
 
@@ -58,7 +67,7 @@ A few decisions I'm happy with:
    VITE_SUPABASE_URL=your-project-url
    VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
    ```
-3. In Supabase, create the `books` and `projects` tables with Row-Level Security enabled, and a public `covers` storage bucket. A single setup script is on the roadmap.
+3. In Supabase, create the `books`, `chapters`, and `chapter_versions` tables with Row-Level Security enabled, and a public `covers` storage bucket. A single setup script is on the roadmap.
 4. Start the dev server:
    ```bash
    npm run dev
@@ -68,10 +77,13 @@ A few decisions I'm happy with:
 
 Built at a relaxed, hobby pace. Next up:
 
-- Rich-text editor (Tiptap) with chapters and autosave
-- Version history and backups
-- Word-count goals, book status, search and filter
-- Export to PDF and Word
+- Find and replace, and live word counts with goals
+- Settings for your account and for each manuscript
+- Import from Word, so you can bring an existing draft in
+- Projects and folders for organizing manuscripts
+- Scenes inside chapters, with drag and drop
+- Notes and a to-do list alongside your draft
+- A planner for outlining, characters, and research
 
 ## Status
 
