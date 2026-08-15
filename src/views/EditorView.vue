@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-	import { ref, onMounted, onBeforeUnmount } from "vue";
+	import { ref, onMounted, onBeforeUnmount, computed } from "vue";
 	import { useRoute, useRouter } from "vue-router";
 	import { storeToRefs } from "pinia";
 
@@ -56,8 +56,8 @@
 	import { exportToEpub } from "../lib/exportEpub";
 
 	import { PageBreak } from "../lib/pageBreak";
-	import { countWords } from "../lib/wordCount.ts";
 	import { daysLeft } from "../lib/trash.ts";
+	import { countWords, countWordsInText } from "../lib/wordCount.ts";
 
 	const route = useRoute();
 	const router = useRouter();
@@ -108,6 +108,8 @@
 	const loading = ref(true);
 	const saveState = ref<"idle" | "saving" | "saved" | "error">("idle");
 
+	const chapterWords = ref(0);
+
 	let saveTimer: ReturnType<typeof setTimeout> | undefined;
 	let isLoadingChapter = false;
 
@@ -125,11 +127,21 @@
 		extensions: [StarterKit, TextAlign.configure({ types: ["heading", "paragraph"] }), PageBreak],
 		content: "",
 		editorProps: { attributes: { class: "prose dark:prose-invert max-w-none min-h-[70vh] focus:outline-none" } },
-		onUpdate: () => {
+		onUpdate: ({ editor }) => {
+			chapterWords.value = countWordsInText(editor.getText());
 			if (isLoadingChapter) return;
 			scheduleSave();
 		},
 	});
+
+	const otherChaptersWords = computed(() =>
+		activeChapters.value.reduce(
+			(total, c) => (c.id === activeChapterId.value ? total : total + countWords(c.content)),
+			0,
+		),
+	);
+
+	const manuscriptWords = computed(() => otherChaptersWords.value + chapterWords.value);
 
 	onMounted(async () => {
 		await fetchChapters(String(route.params.id));
@@ -193,6 +205,7 @@
 		editor.value?.commands.setContent(getChapter(id)?.content ?? "");
 		const loaded = getChapter(id)?.content;
 		if (loaded) sessionBaseline.set(id, loaded);
+		chapterWords.value = countWordsInText(editor.value?.getText() ?? "");
 		isLoadingChapter = false;
 
 		router.replace({ query: { ...route.query, chapter: id } });
@@ -515,9 +528,12 @@
 				<SeparatorHorizontal class="h-4 w-4" />
 			</button>
 
-			<span v-if="saveState !== 'idle'" class="ml-auto pr-3 text-xs text-muted">
-				{{ saveState === "saving" ? "Saving..." : saveState === "error" ? "Couldn't save" : "Saved" }}
-			</span>
+			<div class="ml-auto flex items-center gap-3 pr-1 text-xs text-muted">
+				<span>{{ chapterWords.toLocaleString() }} words</span>
+				<span v-if="saveState !== 'idle'">
+					{{ saveState === "saving" ? "Saving..." : saveState === "error" ? "Couldn't save" : "Saved" }}
+				</span>
+			</div>
 		</div>
 
 		<div class="flex min-h-0 flex-1 gap-3">
@@ -737,14 +753,15 @@
 				<p v-else-if="!loading" class="p-8 text-sm text-muted">Select or create a chapter to start writing.</p>
 			</main>
 
-			<!-- Right sidebar (placeholders) -->
+			<!-- Right sidebar -->
 			<aside class="panel hidden w-72 shrink-0 flex-col gap-4 overflow-y-auto rounded-2xl p-4 xl:flex">
 				<div class="rounded-xl bg-canvas/40 p-4">
 					<div class="flex items-center gap-2 text-sm font-medium text-ink">
 						<Target class="h-4 w-4" />
-						Word goal
+						Word count
 					</div>
-					<p class="mt-1.5 text-xs text-muted">Coming soon</p>
+					<p class="mt-2 text-xl font-semibold text-ink">{{ manuscriptWords.toLocaleString() }}</p>
+					<p class="mt-0.5 text-xs text-muted">{{ chapterWords.toLocaleString() }} in this chapter</p>
 				</div>
 				<div class="rounded-xl bg-canvas/40 p-4">
 					<div class="flex items-center gap-2 text-sm font-medium text-ink">
